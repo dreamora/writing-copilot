@@ -1,6 +1,4 @@
 node_modules/
-.env
-.env.local
 dist/
 build/
 .bun/
@@ -8,7 +6,8 @@ build/
 *.db-shm
 *.db-wal
 *.bak
-.vscode/
-.idea/
-*.swp
+.env
+.env.local
+.env.*.local
 *.log
+.DS_Store
