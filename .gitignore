@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.local
+dist/
+build/
+.bun/
+*.db
+*.db-shm
+*.db-wal
+*.bak
+.vscode/
+.idea/
+*.swp
+*.log
