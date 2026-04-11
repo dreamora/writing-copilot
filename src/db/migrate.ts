@@ -39,14 +39,8 @@ for (const migration of migrations) {
     console.log(`[migrate] Applying ${name}...`);
     
     try {
-      // Execute each statement separately
-      const statements = sql.split(';').filter(s => s.trim());
-      for (const stmt of statements) {
-        if (stmt.trim()) {
-          db.exec(stmt);
-        }
-      }
-      
+      // Execute full SQL as single transaction to avoid incomplete input errors
+      db.exec(sql);
       db.exec('INSERT INTO migrations (name) VALUES (?)', [name]);
       console.log(`[migrate] ✓ ${name}`);
     } catch (err) {
