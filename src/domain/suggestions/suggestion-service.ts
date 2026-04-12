@@ -1,12 +1,9 @@
-// Bead 2.5 — Suggestion lifecycle service (CRUD + status transitions)
+// Suggestion lifecycle service — Phase 3: emits telemetry events
 import { randomUUID } from "crypto";
 import { Database } from "bun:sqlite";
-import type {
-  Suggestion,
-  SuggestionStatus,
-  SuggestionRequest,
-} from "./suggestion-types";
+import type { Suggestion, SuggestionStatus, SuggestionRequest } from "./suggestion-types";
 import type { SuggestionProvider } from "../../adapters/ai/SuggestionProvider";
+import type { EventWriter } from "../telemetry/event-writer";
 
 function rowToSuggestion(row: Record<string, unknown>): Suggestion {
   return {
@@ -33,10 +30,21 @@ function rowToSuggestion(row: Record<string, unknown>): Suggestion {
   };
 }
 
-export class SuggestionService {
-  constructor(private db: Database, private provider: SuggestionProvider) {}
+const STATUS_TO_EVENT: Record<string, string> = {
+  accepted: "suggestion_accepted",
+  rejected: "suggestion_rejected",
+  edited_applied: "suggestion_edited_then_applied",
+  deferred: "suggestion_deferred",
+};
 
-  async createSuggestion(req: SuggestionRequest): Promise<Suggestion> {
+export class SuggestionService {
+  constructor(
+    private db: Database,
+    private provider: SuggestionProvider,
+    private eventWriter?: EventWriter
+  ) {}
+
+  async createSuggestion(req: SuggestionRequest, sessionId = "default"): Promise<Suggestion> {
     const response = await this.provider.suggest(req);
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -53,12 +61,21 @@ export class SuggestionService {
       .run(
         id, req.documentId, req.blockId, req.actionType,
         req.selection.selectedText, req.selection.charStart, req.selection.charEnd,
-        req.context.before, req.context.after,
-        req.customInstruction ?? null,
+        req.context.before, req.context.after, req.customInstruction ?? null,
         response.issueSummary, response.rationale, response.proposedText,
-        response.riskNotes ?? null, response.confidence ?? null,
-        now, now
+        response.riskNotes ?? null, response.confidence ?? null, now, now
       );
+
+    // Emit telemetry
+    this.eventWriter?.write({
+      sessionId,
+      documentId: req.documentId,
+      blockId: req.blockId,
+      suggestionId: id,
+      eventType: "suggestion_created",
+      actor: "user",
+      payload: { actionType: req.actionType, selectedTextLength: req.selection.selectedText.length },
+    });
 
     return this.getById(id)!;
   }
@@ -80,7 +97,8 @@ export class SuggestionService {
   transition(
     id: string,
     status: SuggestionStatus,
-    editedText?: string
+    editedText?: string,
+    sessionId = "default"
   ): Suggestion | null {
     const now = new Date().toISOString();
     const decisionStatuses: SuggestionStatus[] = ["accepted", "rejected", "edited_applied"];
@@ -102,7 +120,24 @@ export class SuggestionService {
         .run(status, now, decidedAt, id);
     }
 
-    return this.getById(id);
+    const updated = this.getById(id);
+    if (!updated) return null;
+
+    // Emit telemetry
+    const eventType = STATUS_TO_EVENT[status];
+    if (eventType && this.eventWriter) {
+      this.eventWriter.write({
+        sessionId,
+        documentId: updated.documentId,
+        blockId: updated.blockId,
+        suggestionId: id,
+        eventType: eventType as Parameters<typeof this.eventWriter.write>[0]["eventType"],
+        actor: "user",
+        payload: { status, hasEditedText: !!editedText },
+      });
+    }
+
+    return updated;
   }
 
   getById(id: string): Suggestion | null {
