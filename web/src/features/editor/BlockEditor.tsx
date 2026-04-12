@@ -1,15 +1,22 @@
-// Updated BlockEditor — Phase 2: Selection + popover integration
+// Bead 1.5 + 2.1 — Block editor with selection capture
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import type { Block } from "../../../../src/domain/blocks/block";
-import { useBlockSelection } from "./SelectionState";
-import SelectionPopover from "./SelectionPopover";
 import type { SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
+import { captureSelection, computePopoverPosition } from "./SelectionState";
+import type { SelectionSpan, PopoverPosition } from "./SelectionState";
+import SelectionPopover from "./SelectionPopover";
 
 interface BlockEditorProps {
   blocks: Block[];
   onBlockChange: (id: string, newMarkdown: string) => void;
-  onSuggestionRequested?: (blockId: string, action: SuggestionActionType, selectedText: string, charStart: number, charEnd: number, customInstruction?: string) => void;
   dirtyIds?: Set<string>;
+  onRequestSuggestion?: (
+    blockId: string,
+    selection: SelectionSpan,
+    actionType: SuggestionActionType,
+    customInstruction?: string
+  ) => void;
+  loadingSuggestionBlockId?: string;
 }
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
@@ -24,17 +31,17 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
 };
 
 function AutoresizeTextarea({
+  blockId,
   value,
   onChange,
   isDirty,
-  blockId,
-  onSelectionChange,
+  onSelectionCapture,
 }: {
+  blockId: string;
   value: string;
   onChange: (val: string) => void;
   isDirty: boolean;
-  blockId: string;
-  onSelectionChange: (ref: HTMLTextAreaElement | null) => void;
+  onSelectionCapture: (span: SelectionSpan, pos: PopoverPosition) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -45,15 +52,21 @@ function AutoresizeTextarea({
     }
   }, [value]);
 
-  useEffect(() => {
-    onSelectionChange(ref.current);
-  }, [blockId, onSelectionChange]);
+  const handleMouseUp = () => {
+    if (!ref.current) return;
+    const span = captureSelection(blockId, ref.current);
+    if (span) {
+      const pos = computePopoverPosition(ref.current);
+      onSelectionCapture(span, pos);
+    }
+  };
 
   return (
     <textarea
       ref={ref}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onMouseUp={handleMouseUp}
       style={{
         width: "100%",
         fontFamily: "monospace",
@@ -73,12 +86,13 @@ function AutoresizeTextarea({
 export default function BlockEditor({
   blocks,
   onBlockChange,
-  onSuggestionRequested,
   dirtyIds = new Set(),
+  onRequestSuggestion,
+  loadingSuggestionBlockId,
 }: BlockEditorProps) {
-  const [suggestionLoading, setSuggestionLoading] = useState(false);
-  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
-  
+  const [activeSelection, setActiveSelection] = useState<SelectionSpan | null>(null);
+  const [popoverPos, setPopoverPos] = useState<PopoverPosition | null>(null);
+
   const handleChange = useCallback(
     (id: string, value: string) => {
       onBlockChange(id, value);
@@ -86,89 +100,34 @@ export default function BlockEditor({
     [onBlockChange]
   );
 
-  const handleTextareaRef = useCallback((blockId: string, ref: HTMLTextAreaElement | null) => {
-    setActiveBlockId(blockId);
+  const handleSelectionCapture = useCallback(
+    (span: SelectionSpan, pos: PopoverPosition) => {
+      setActiveSelection(span);
+      setPopoverPos(pos);
+    },
+    []
+  );
+
+  const handlePopoverAction = useCallback(
+    (actionType: SuggestionActionType, customInstruction?: string) => {
+      if (activeSelection && onRequestSuggestion) {
+        onRequestSuggestion(
+          activeSelection.blockId,
+          activeSelection,
+          actionType,
+          customInstruction
+        );
+      }
+      setActiveSelection(null);
+      setPopoverPos(null);
+    },
+    [activeSelection, onRequestSuggestion]
+  );
+
+  const closePopover = useCallback(() => {
+    setActiveSelection(null);
+    setPopoverPos(null);
   }, []);
-
-  const renderBlock = (block: Block) => {
-    const isDirty = dirtyIds.has(block.id);
-    const { selection, handleSelect, clearSelection } = useBlockSelection({
-      blockId: block.id,
-      blockMarkdown: block.markdown,
-    });
-
-    return (
-      <div key={block.id} style={{ position: "relative" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            marginBottom: "4px",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "11px",
-              background: "#f3f4f6",
-              padding: "2px 6px",
-              borderRadius: "3px",
-              color: "#6b7280",
-              fontFamily: "monospace",
-            }}
-          >
-            {BLOCK_TYPE_LABELS[block.type] ?? block.type}
-          </span>
-          <span style={{ fontSize: "10px", color: "#d1d5db" }}>
-            #{block.index + 1}
-          </span>
-          {isDirty && (
-            <span
-              style={{ fontSize: "10px", color: "#f59e0b", fontWeight: 600 }}
-            >
-              unsaved
-            </span>
-          )}
-        </div>
-
-        <AutoresizeTextarea
-          value={block.markdown}
-          onChange={(val) => handleChange(block.id, val)}
-          isDirty={isDirty}
-          blockId={block.id}
-          onSelectionChange={(ref) => {
-            if (ref) {
-              ref.addEventListener("select", handleSelect);
-              handleTextareaRef(block.id, ref);
-              return () => ref.removeEventListener("select", handleSelect);
-            }
-          }}
-        />
-
-        <SelectionPopover
-          selection={selection}
-          isLoading={suggestionLoading}
-          onAction={(action, customInstruction) => {
-            if (selection && onSuggestionRequested) {
-              setSuggestionLoading(true);
-              onSuggestionRequested(
-                block.id,
-                action,
-                selection.selectedText,
-                selection.charStart,
-                selection.charEnd,
-                customInstruction
-              );
-              clearSelection();
-              // Reset loading after a delay (would be reset by parent component)
-              setTimeout(() => setSuggestionLoading(false), 2000);
-            }
-          }}
-          onClose={clearSelection}
-        />
-      </div>
-    );
-  };
 
   if (blocks.length === 0) {
     return (
@@ -179,8 +138,67 @@ export default function BlockEditor({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {blocks.map((block) => renderBlock(block))}
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px", position: "relative" }}>
+      {blocks.map((block) => {
+        const isDirty = dirtyIds.has(block.id);
+        const isLoadingSuggestion = loadingSuggestionBlockId === block.id;
+        return (
+          <div key={block.id} style={{ position: "relative" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                marginBottom: "4px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: "#f3f4f6",
+                  padding: "2px 6px",
+                  borderRadius: "3px",
+                  color: "#6b7280",
+                  fontFamily: "monospace",
+                }}
+              >
+                {BLOCK_TYPE_LABELS[block.type] ?? block.type}
+              </span>
+              <span style={{ fontSize: "10px", color: "#d1d5db" }}>
+                #{block.index + 1}
+              </span>
+              {isDirty && (
+                <span style={{ fontSize: "10px", color: "#f59e0b", fontWeight: 600 }}>
+                  unsaved
+                </span>
+              )}
+              {isLoadingSuggestion && (
+                <span style={{ fontSize: "10px", color: "#3b82f6" }}>
+                  ✦ getting suggestion…
+                </span>
+              )}
+            </div>
+            <AutoresizeTextarea
+              blockId={block.id}
+              value={block.markdown}
+              onChange={(val) => handleChange(block.id, val)}
+              isDirty={isDirty}
+              onSelectionCapture={handleSelectionCapture}
+            />
+          </div>
+        );
+      })}
+
+      {/* Selection popover — rendered at document level */}
+      {activeSelection && popoverPos && (
+        <SelectionPopover
+          selection={activeSelection}
+          position={popoverPos}
+          onAction={handlePopoverAction}
+          onClose={closePopover}
+          loading={loadingSuggestionBlockId === activeSelection.blockId}
+        />
+      )}
     </div>
   );
 }
