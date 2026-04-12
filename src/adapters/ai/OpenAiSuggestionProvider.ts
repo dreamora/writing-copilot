@@ -1,83 +1,128 @@
-// Bead 2.3 — OpenAI adapter implementation
-import type { SuggestionProvider } from "./SuggestionProvider";
-import type { SuggestionRequest, SuggestionResponse } from "../../domain/suggestions/suggestion-types";
+// Bead 2.3 — OpenAI Suggestion Provider implementation
+import OpenAI from "openai";
 import { buildPrompt } from "../../domain/suggestions/prompt-builder";
 import { parseModelResponse } from "../../domain/suggestions/response-parser";
+import type {
+  SuggestionProvider,
+  SuggestionRequest,
+  SuggestionResponse,
+} from "../../domain/suggestions/suggestion-types";
 
-const TIMEOUT_MS = 30_000;
-const MAX_RETRIES = 1;
+const TIMEOUT_MS = 30000; // 30 second timeout per request
+const MAX_RETRIES = 1; // 1 retry on parse failure
 
 export class OpenAiSuggestionProvider implements SuggestionProvider {
-  private apiKey: string;
-  private model: string;
-  private baseUrl: string;
+  private client: OpenAI;
+  private model: string = "gpt-4o-mini";
+  private temperature: number = 0.7;
 
-  constructor(options?: { apiKey?: string; model?: string; baseUrl?: string }) {
-    this.apiKey = options?.apiKey ?? process.env.OPENAI_API_KEY ?? "";
-    this.model = options?.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-    this.baseUrl = options?.baseUrl ?? "https://api.openai.com/v1";
+  constructor(apiKey?: string, model?: string) {
+    this.client = new OpenAI({
+      apiKey: apiKey || process.env.OPENAI_API_KEY,
+    });
+    if (model) {
+      this.model = model;
+    }
   }
 
+  /**
+   * Request a suggestion from OpenAI.
+   * Builds prompt, calls API, parses and validates response with retry.
+   */
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
     const prompt = buildPrompt(req);
 
+    let lastError: Error | null = null;
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const result = await this.callApi(prompt);
-        return parseModelResponse(result);
-      } catch (err) {
-        if (attempt === MAX_RETRIES) throw err;
-        // On parse failure, retry once with explicit JSON reminder
+        // Call OpenAI with timeout wrapper
+        const response = await this.callWithTimeout(prompt);
+
+        // Parse and validate response
+        return parseModelResponse(response);
+      } catch (e) {
+        lastError = e as Error;
+
+        // If this is a validation error and we have retries left, try again
+        if (attempt < MAX_RETRIES && this.isValidationError(lastError)) {
+          console.warn(
+            `Suggestion parse failed (attempt ${attempt + 1}), retrying…`,
+            lastError.message
+          );
+          continue;
+        }
+
+        // Otherwise, throw
+        throw lastError;
       }
     }
 
-    throw new Error("Unreachable");
+    // Should not reach here, but just in case
+    throw lastError || new Error("Unknown error in suggest");
   }
 
-  private async callApi(prompt: string): Promise<string> {
+  /**
+   * Call OpenAI API with timeout guardrail.
+   */
+  private async callWithTimeout(prompt: string): Promise<string> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-      const res = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.3,
-          max_tokens: 500,
-          response_format: { type: "json_object" },
-        }),
-        signal: controller.signal,
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: this.temperature,
+        max_tokens: 500,
       });
 
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`OpenAI API error ${res.status}: ${body.slice(0, 200)}`);
+      const text = response.choices[0]?.message?.content || "";
+
+      if (!text) {
+        throw new Error("OpenAI returned empty content");
       }
 
-      const data = (await res.json()) as {
-        choices: Array<{ message: { content: string } }>;
-      };
-      return data.choices[0]?.message.content ?? "";
+      return text;
     } finally {
-      clearTimeout(timer);
+      clearTimeout(timeoutId);
     }
+  }
+
+  /**
+   * Heuristic: is this a schema/parse error (retry-able)
+   * vs. a fatal error (API key, quota, etc.)?
+   */
+  private isValidationError(error: Error): boolean {
+    const msg = error.message.toLowerCase();
+    return (
+      msg.includes("schema validation") ||
+      msg.includes("no json object") ||
+      msg.includes("not valid json")
+    );
   }
 }
 
-/** Stub provider for tests — returns deterministic response without API call */
+/**
+ * Stub provider for development (no API key required)
+ */
 export class StubSuggestionProvider implements SuggestionProvider {
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
+    // Return a deterministic stub response
     return {
-      issueSummary: `[STUB] Issue with "${req.selection.selectedText.slice(0, 30)}"`,
-      rationale: "This is a stub response for testing.",
-      proposedText: req.selection.selectedText + " [improved]",
-      confidence: 0.8,
+      issueSummary: `[STUB] Improved clarity for: "${req.selection.selectedText.slice(0, 20)}..."`,
+      rationale: `This ${req.actionType} improves readability.`,
+      proposedText: `[IMPROVED] ${req.selection.selectedText}`,
+      riskNotes: "This is a stub response (no API key configured)",
+      confidence: 0.5,
     };
   }
+}
+
+// Export factory for easy integration
+export function createOpenAiProvider(
+  apiKey?: string,
+  model?: string
+): OpenAiSuggestionProvider {
+  return new OpenAiSuggestionProvider(apiKey, model);
 }
