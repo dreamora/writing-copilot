@@ -1,108 +1,132 @@
-import { useEffect, useState } from 'react';
+// Updated App.tsx — Phase 1: uses BlockEditor + useBlockEditor hook
+import { useState, useEffect } from "react";
+import BlockEditor from "./features/editor/BlockEditor";
+import { useBlockEditor } from "./features/editor/blockState";
 
-export function App() {
-  const [health, setHealth] = useState<string | null>(null);
-  const [docPath, setDocPath] = useState('sample.md');
-  const [content, setContent] = useState('');
-  const [status, setStatus] = useState('');
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001";
+const DEFAULT_DOC = import.meta.env.VITE_DEFAULT_DOC ?? "sample.md";
 
-  // Check health on mount
+export default function App() {
+  const [apiStatus, setApiStatus] = useState<"loading" | "ok" | "error">("loading");
+  const [docPath, setDocPath] = useState(DEFAULT_DOC);
+
+  const { blocks, loading, saving, error, dirtyIds, updateBlock, saveAll, loadDoc } =
+    useBlockEditor();
+
+  // Check API health on mount
   useEffect(() => {
-    fetch('/api/health')
-      .then(r => r.json())
-      .then(data => setHealth(data.status))
-      .catch(err => setHealth(`error: ${err.message}`));
+    fetch(`${API_BASE}/api/health`)
+      .then((r) => (r.ok ? setApiStatus("ok") : setApiStatus("error")))
+      .catch(() => setApiStatus("error"));
   }, []);
 
-  // Load document
-  const handleLoad = async () => {
-    setStatus('Loading...');
-    try {
-      const res = await fetch(`/api/docs?path=${encodeURIComponent(docPath)}`);
-      if (!res.ok) {
-        setStatus(`Error: ${res.status}`);
-        return;
-      }
-      const data = await res.json();
-      setContent(data.content);
-      setStatus(`Loaded: ${data.path} (hash: ${data.hash.substring(0, 8)}...)`);
-    } catch (err) {
-      setStatus(`Error: ${(err as Error).message}`);
-    }
+  const handleLoad = () => {
+    if (docPath) loadDoc(docPath);
   };
 
-  // Save document
-  const handleSave = async () => {
-    setStatus('Saving...');
-    try {
-      const res = await fetch('/api/docs/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: docPath, content })
-      });
-      if (!res.ok) {
-        setStatus(`Error: ${res.status}`);
-        return;
-      }
-      const data = await res.json();
-      const backupInfo = data.backupPath ? ` (backup: ${data.backupPath})` : '';
-      setStatus(`Saved: ${data.path} (hash: ${data.hash.substring(0, 8)}...)${backupInfo}`);
-    } catch (err) {
-      setStatus(`Error: ${(err as Error).message}`);
-    }
+  const handleSave = () => {
+    saveAll();
   };
 
   return (
-    <div>
-      <h1>Writing Copilot — Phase 0</h1>
-      
-      <div style={{ marginBottom: '1rem', padding: '1rem', background: '#fff', borderRadius: '4px' }}>
-        <h2>API Status</h2>
-        <p>Health: <strong>{health === 'ok' ? '✓ OK' : health || 'checking...'}</strong></p>
-      </div>
+    <div style={{ maxWidth: "860px", margin: "0 auto", padding: "24px", fontFamily: "sans-serif" }}>
+      <h1 style={{ fontSize: "22px", marginBottom: "4px" }}>Writing Copilot</h1>
 
-      <div style={{ marginBottom: '1rem', padding: '1rem', background: '#fff', borderRadius: '4px' }}>
-        <h2>Document Editor</h2>
-        
-        <div style={{ marginBottom: '1rem' }}>
-          <label>
-            Document path:
-            <input
-              type="text"
-              value={docPath}
-              onChange={e => setDocPath(e.target.value)}
-              style={{ marginLeft: '0.5rem', padding: '0.5rem', width: '300px' }}
-            />
-          </label>
-        </div>
-
-        <div style={{ marginBottom: '1rem' }}>
-          <button onClick={handleLoad} style={{ padding: '0.5rem 1rem', marginRight: '0.5rem' }}>
-            Load
-          </button>
-          <button onClick={handleSave} style={{ padding: '0.5rem 1rem' }}>
-            Save
-          </button>
-        </div>
-
-        <textarea
-          value={content}
-          onChange={e => setContent(e.target.value)}
+      {/* API status badge */}
+      <div style={{ marginBottom: "16px" }}>
+        <span
           style={{
-            width: '100%',
-            height: '300px',
-            padding: '0.5rem',
-            fontFamily: 'monospace',
-            borderRadius: '4px',
-            border: '1px solid #ccc'
+            display: "inline-block",
+            padding: "3px 10px",
+            borderRadius: "12px",
+            fontSize: "12px",
+            background:
+              apiStatus === "ok" ? "#d1fae5" : apiStatus === "error" ? "#fee2e2" : "#f3f4f6",
+            color:
+              apiStatus === "ok" ? "#065f46" : apiStatus === "error" ? "#991b1b" : "#6b7280",
           }}
-          placeholder="Document content..."
-        />
-
-        <div style={{ marginTop: '1rem', color: '#666' }}>
-          <p>{status || 'Ready'}</p>
-        </div>
+        >
+          API: {apiStatus}
+        </span>
       </div>
+
+      {/* Doc path input + load */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+        <input
+          type="text"
+          value={docPath}
+          onChange={(e) => setDocPath(e.target.value)}
+          placeholder="Document path (e.g. sample.md)"
+          style={{
+            flex: 1,
+            padding: "8px",
+            border: "1px solid #d1d5db",
+            borderRadius: "4px",
+            fontSize: "14px",
+          }}
+        />
+        <button
+          onClick={handleLoad}
+          disabled={loading}
+          style={{
+            padding: "8px 16px",
+            background: "#3b82f6",
+            color: "#fff",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          {loading ? "Loading…" : "Load"}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving || blocks.length === 0 || dirtyIds.size === 0}
+          style={{
+            padding: "8px 16px",
+            background: dirtyIds.size > 0 ? "#f59e0b" : "#9ca3af",
+            color: "#fff",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          {saving ? "Saving…" : `Save${dirtyIds.size > 0 ? ` (${dirtyIds.size})` : ""}`}
+        </button>
+      </div>
+
+      {/* Error display */}
+      {error && (
+        <div
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            padding: "10px",
+            borderRadius: "4px",
+            marginBottom: "12px",
+            fontSize: "13px",
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Block editor */}
+      {blocks.length > 0 && (
+        <div>
+          <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>
+            {blocks.length} block{blocks.length !== 1 ? "s" : ""}
+            {dirtyIds.size > 0 && ` · ${dirtyIds.size} unsaved`}
+          </div>
+          <BlockEditor blocks={blocks} onBlockChange={updateBlock} dirtyIds={dirtyIds} />
+        </div>
+      )}
+
+      {blocks.length === 0 && !loading && (
+        <div style={{ color: "#9ca3af", textAlign: "center", padding: "40px" }}>
+          Enter a document path and click Load to begin editing.
+        </div>
+      )}
     </div>
   );
 }
