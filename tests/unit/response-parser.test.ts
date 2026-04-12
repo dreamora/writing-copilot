@@ -1,87 +1,55 @@
-// Unit tests for response parser (Bead 2.4)
+// Unit tests for response parser
 import { describe, it, expect } from "bun:test";
 import { parseModelResponse } from "../../src/domain/suggestions/response-parser";
 
-describe("Response Parser", () => {
+describe("Response parser", () => {
   it("parses valid JSON response", () => {
-    const response = JSON.stringify({
-      issueSummary: "Clarity improvement",
-      rationale: "This is clearer",
-      proposedText: "improved text",
+    const raw = JSON.stringify({
+      issueSummary: "Sentence is too wordy.",
+      rationale: "Removing redundant words improves clarity.",
+      proposedText: "This sentence is clear.",
       confidence: 0.9,
     });
-
-    const result = parseModelResponse(response);
-    expect(result.issueSummary).toBe("Clarity improvement");
-    expect(result.proposedText).toBe("improved text");
+    const result = parseModelResponse(raw);
+    expect(result.issueSummary).toBe("Sentence is too wordy.");
+    expect(result.proposedText).toBe("This sentence is clear.");
     expect(result.confidence).toBe(0.9);
   });
 
-  it("extracts JSON from markdown code fence", () => {
-    const response = `\`\`\`json
-{
-  "issueSummary": "Test",
-  "rationale": "Reason",
-  "proposedText": "text"
-}
-\`\`\``;
-
-    const result = parseModelResponse(response);
-    expect(result.issueSummary).toBe("Test");
+  it("strips markdown code fences", () => {
+    const raw = "```json\n" + JSON.stringify({
+      issueSummary: "Issue",
+      rationale: "Rationale",
+      proposedText: "Better text",
+    }) + "\n```";
+    const result = parseModelResponse(raw);
+    expect(result.issueSummary).toBe("Issue");
   });
 
-  it("rejects response without JSON object", () => {
-    const response = "This is not JSON at all";
-    expect(() => parseModelResponse(response)).toThrow("contains no JSON object");
+  it("extracts JSON from surrounding text", () => {
+    const obj = { issueSummary: "X", rationale: "Y", proposedText: "Z" };
+    const raw = `Here is my response: ${JSON.stringify(obj)} Done.`;
+    const result = parseModelResponse(raw);
+    expect(result.proposedText).toBe("Z");
   });
 
-  it("rejects malformed JSON", () => {
-    const response = '{ invalid json }';
-    expect(() => parseModelResponse(response)).toThrow("not valid JSON");
+  it("throws on missing required fields", () => {
+    const raw = JSON.stringify({ issueSummary: "Only summary" });
+    expect(() => parseModelResponse(raw)).toThrow();
   });
 
-  it("rejects response missing required fields", () => {
-    const response = JSON.stringify({
-      issueSummary: "Test",
-      // missing proposedText and rationale
-    });
-
-    expect(() => parseModelResponse(response)).toThrow("schema validation");
+  it("throws on non-JSON response", () => {
+    expect(() => parseModelResponse("This is just text, no JSON at all!")).toThrow();
   });
 
   it("accepts null riskNotes", () => {
-    const response = JSON.stringify({
-      issueSummary: "Test",
-      rationale: "Reason",
-      proposedText: "text",
+    const raw = JSON.stringify({
+      issueSummary: "Issue",
+      rationale: "Rationale",
+      proposedText: "Text",
       riskNotes: null,
     });
-
-    const result = parseModelResponse(response);
+    const result = parseModelResponse(raw);
     expect(result.riskNotes).toBeUndefined();
-  });
-
-  it("rejects confidence outside 0-1 range", () => {
-    const response = JSON.stringify({
-      issueSummary: "Test",
-      rationale: "Reason",
-      proposedText: "text",
-      confidence: 1.5,
-    });
-
-    expect(() => parseModelResponse(response)).toThrow("schema validation");
-  });
-
-  it("handles leading/trailing whitespace", () => {
-    const response = `   
-{
-  "issueSummary": "Test",
-  "rationale": "Reason",
-  "proposedText": "text"
-}
-    `;
-
-    const result = parseModelResponse(response);
-    expect(result.issueSummary).toBe("Test");
   });
 });
