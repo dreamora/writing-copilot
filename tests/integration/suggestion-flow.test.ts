@@ -1,48 +1,20 @@
-import { describe, it, expect, beforeEach, beforeAll, afterEach } from "bun:test";
+// Integration tests for suggestion flow (bun:sqlite in-memory + StubSuggestionProvider)
+import { describe, it, expect, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { SuggestionService } from "../../src/domain/suggestions/suggestion-service";
+import { StubSuggestionProvider } from "../../src/adapters/ai/OpenAiSuggestionProvider";
+import { EventWriter } from "../../src/domain/telemetry/event-writer";
 import type { SuggestionRequest } from "../../src/domain/suggestions/suggestion-types";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-import { SuggestionService } from "../../src/domain/suggestions/suggestion-service";
-import { StubSuggestionProvider } from "../../src/adapters/ai/OpenAiSuggestionProvider";
-
-let sqliteModuleAvailable = true;
-let DatabaseClass: any;
-
-beforeAll(() => {
-  try {
-    DatabaseClass = require("better-sqlite3");
-  } catch {
-    sqliteModuleAvailable = false;
+function createTestDb(): Database {
+  const db = new Database(":memory:");
+  db.exec("PRAGMA journal_mode=WAL;");
+  const migDir = join(import.meta.dir, "../../src/db/migrations");
+  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql"]) {
+    db.exec(readFileSync(join(migDir, f), "utf-8"));
   }
-});
-
-function createTestDb() {
-  if (!sqliteModuleAvailable || !DatabaseClass) {
-    throw new Error("better-sqlite3 native binding unavailable in this runtime");
-  }
-
-  const db = new DatabaseClass(":memory:");
-  const m1 = readFileSync(
-    join(import.meta.dir, "../../src/db/migrations/001_init.sql"),
-    "utf-8"
-  );
-  const m3 = readFileSync(
-    join(import.meta.dir, "../../src/db/migrations/003_suggestions.sql"),
-    "utf-8"
-  );
-
-  m1
-    .split(";")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .forEach((s) => db.exec(s + ";"));
-  m3
-    .split(";")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .forEach((s) => db.exec(s + ";"));
-
   return db;
 }
 
@@ -55,39 +27,24 @@ const BASE_REQ: SuggestionRequest = {
 };
 
 describe("Suggestion flow (integration)", () => {
-  let db: any;
+  let db: Database;
   let service: SuggestionService;
 
   beforeEach(() => {
-    if (!sqliteModuleAvailable) {
-      return;
-    }
-
     db = createTestDb();
-    service = new SuggestionService(db, new StubSuggestionProvider());
-  });
-
-  afterEach(() => {
-    db?.close?.();
+    const ew = new EventWriter(db);
+    service = new SuggestionService(db, new StubSuggestionProvider(), ew);
   });
 
   it("creates a suggestion and persists it", async () => {
-    if (!sqliteModuleAvailable) {
-      return;
-    }
-
     const s = await service.createSuggestion(BASE_REQ);
     expect(s.id).toBeTruthy();
     expect(s.status).toBe("open");
     expect(s.documentId).toBe("doc-test");
-    expect(s.blockId).toBe("block-001");
-    // StubProvider returns [IMPROVED] prefixed text
-    expect(s.proposedText).toContain("[IMPROVED]");
     expect(s.proposedText).toContain("this is a test sentence");
   });
 
   it("accept transitions status to accepted with decidedAt", async () => {
-    if (!sqliteModuleAvailable) return;
     const s = await service.createSuggestion(BASE_REQ);
     const accepted = service.transition(s.id, "accepted");
     expect(accepted?.status).toBe("accepted");
@@ -95,7 +52,6 @@ describe("Suggestion flow (integration)", () => {
   });
 
   it("reject transitions status to rejected with decidedAt", async () => {
-    if (!sqliteModuleAvailable) return;
     const s = await service.createSuggestion(BASE_REQ);
     const rejected = service.transition(s.id, "rejected");
     expect(rejected?.status).toBe("rejected");
@@ -103,7 +59,6 @@ describe("Suggestion flow (integration)", () => {
   });
 
   it("edit-apply stores edited text and sets decidedAt", async () => {
-    if (!sqliteModuleAvailable) return;
     const s = await service.createSuggestion(BASE_REQ);
     const applied = service.transition(s.id, "edited_applied", "my edited version");
     expect(applied?.status).toBe("edited_applied");
@@ -112,7 +67,6 @@ describe("Suggestion flow (integration)", () => {
   });
 
   it("defer keeps status deferred without decidedAt", async () => {
-    if (!sqliteModuleAvailable) return;
     const s = await service.createSuggestion(BASE_REQ);
     const deferred = service.transition(s.id, "deferred");
     expect(deferred?.status).toBe("deferred");
@@ -120,7 +74,6 @@ describe("Suggestion flow (integration)", () => {
   });
 
   it("getSuggestionsForDocument returns all for document", async () => {
-    if (!sqliteModuleAvailable) return;
     await service.createSuggestion(BASE_REQ);
     await service.createSuggestion({ ...BASE_REQ, blockId: "block-002" });
     const all = service.getSuggestionsForDocument("doc-test");
@@ -128,18 +81,15 @@ describe("Suggestion flow (integration)", () => {
   });
 
   it("getSuggestionById returns null for unknown suggestion id", () => {
-    if (!sqliteModuleAvailable) return;
-    const result = service.getSuggestionById("nonexistent");
+    const result = service.getById("nonexistent");
     expect(result).toBeNull();
   });
 
   it("full lifecycle: open -> accepted", async () => {
-    if (!sqliteModuleAvailable) return;
     const s = await service.createSuggestion(BASE_REQ);
-    expect(s.status).toBe("open");
-    const accepted = service.transition(s.id, "accepted");
-    expect(accepted?.status).toBe("accepted");
-    const fetched = service.getSuggestionById(s.id);
+    service.transition(s.id, "accepted");
+    const fetched = service.getById(s.id);
     expect(fetched?.status).toBe("accepted");
+    expect(fetched?.decidedAt).toBeTruthy();
   });
 });

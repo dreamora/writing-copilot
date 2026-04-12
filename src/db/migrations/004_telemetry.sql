@@ -46,44 +46,20 @@ CREATE TABLE IF NOT EXISTS block_time_records (
 CREATE INDEX IF NOT EXISTS idx_btime_session ON block_time_records(session_id);
 CREATE INDEX IF NOT EXISTS idx_btime_block ON block_time_records(block_id);
 
--- FTS5 for suggestions (searchable by issue_summary + proposed_text)
+-- FTS5 for suggestions: standalone (not content-backed to avoid trigger complexity)
 CREATE VIRTUAL TABLE IF NOT EXISTS suggestions_fts USING fts5(
-  suggestion_id UNINDEXED,
+  suggestion_id,
   issue_summary,
   rationale,
   proposed_text,
-  selected_text
+  selected_text,
+  tokenize = 'porter ascii'
 );
 
 -- FTS5 for manual rewrites
 CREATE VIRTUAL TABLE IF NOT EXISTS rewrites_fts USING fts5(
-  rewrite_id UNINDEXED,
+  rewrite_id,
   before_text,
-  after_text
+  after_text,
+  tokenize = 'porter ascii'
 );
-
--- Trigger: populate suggestions_fts on insert
-CREATE TRIGGER IF NOT EXISTS suggestions_fts_ai AFTER INSERT ON suggestions BEGIN
-  INSERT INTO suggestions_fts(suggestion_id, issue_summary, rationale, proposed_text, selected_text)
-  VALUES (new.id, new.issue_summary, new.rationale, new.proposed_text, new.selected_text);
-END;
-
--- Trigger: update suggestions_fts on update
-CREATE TRIGGER IF NOT EXISTS suggestions_fts_au AFTER UPDATE ON suggestions BEGIN
-  INSERT INTO suggestions_fts(suggestions_fts, suggestion_id, issue_summary, rationale, proposed_text, selected_text)
-  VALUES('delete', old.id, old.issue_summary, old.rationale, old.proposed_text, old.selected_text);
-  INSERT INTO suggestions_fts(suggestion_id, issue_summary, rationale, proposed_text, selected_text)
-  VALUES (new.id, new.issue_summary, new.rationale, new.proposed_text, new.selected_text);
-END;
-
--- Trigger: delete from suggestions_fts on delete
-CREATE TRIGGER IF NOT EXISTS suggestions_fts_ad AFTER DELETE ON suggestions BEGIN
-  INSERT INTO suggestions_fts(suggestions_fts, suggestion_id, issue_summary, rationale, proposed_text, selected_text)
-  VALUES('delete', old.id, old.issue_summary, old.rationale, old.proposed_text, old.selected_text);
-END;
-
--- Trigger: populate rewrites_fts on insert
-CREATE TRIGGER IF NOT EXISTS rewrites_fts_ai AFTER INSERT ON manual_rewrites BEGIN
-  INSERT INTO rewrites_fts(rewrite_id, before_text, after_text)
-  VALUES (new.id, new.before_text, new.after_text);
-END;

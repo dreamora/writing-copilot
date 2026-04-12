@@ -49,6 +49,11 @@ export class RewriteCapture {
         input.beforeText, input.afterText, deltaMetric, now
       );
 
+    // Populate FTS5 index
+    this.db
+      .prepare("INSERT INTO rewrites_fts(rewrite_id, before_text, after_text) VALUES (?, ?, ?)")
+      .run(id, input.beforeText, input.afterText);
+
     return {
       id,
       sessionId: input.sessionId,

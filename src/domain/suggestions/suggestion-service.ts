@@ -1,4 +1,4 @@
-// Suggestion lifecycle service — Phase 3: emits telemetry events
+// Suggestion lifecycle service — Phase 3: emits telemetry, FTS5 population
 import { randomUUID } from "crypto";
 import { Database } from "bun:sqlite";
 import type { Suggestion, SuggestionStatus, SuggestionRequest } from "./suggestion-types";
@@ -66,6 +66,14 @@ export class SuggestionService {
         response.riskNotes ?? null, response.confidence ?? null, now, now
       );
 
+    // Populate FTS5
+    this.db
+      .prepare(
+        `INSERT INTO suggestions_fts(suggestion_id, issue_summary, rationale, proposed_text, selected_text)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(id, response.issueSummary, response.rationale, response.proposedText, req.selection.selectedText);
+
     // Emit telemetry
     this.eventWriter?.write({
       sessionId,
@@ -105,19 +113,25 @@ export class SuggestionService {
     const decidedAt = decisionStatuses.includes(status) ? now : null;
 
     if (editedText !== undefined) {
-      this.db
-        .prepare(
-          `UPDATE suggestions SET status = ?, edited_text = ?, updated_at = ?,
-           decided_at = COALESCE(?, decided_at) WHERE id = ?`
-        )
-        .run(status, editedText, now, decidedAt, id);
+      if (decidedAt !== null) {
+        this.db.prepare(
+          "UPDATE suggestions SET status = ?, edited_text = ?, updated_at = ?, decided_at = ? WHERE id = ?"
+        ).run(status, editedText, now, decidedAt, id);
+      } else {
+        this.db.prepare(
+          "UPDATE suggestions SET status = ?, edited_text = ?, updated_at = ? WHERE id = ?"
+        ).run(status, editedText, now, id);
+      }
     } else {
-      this.db
-        .prepare(
-          `UPDATE suggestions SET status = ?, updated_at = ?,
-           decided_at = COALESCE(?, decided_at) WHERE id = ?`
-        )
-        .run(status, now, decidedAt, id);
+      if (decidedAt !== null) {
+        this.db.prepare(
+          "UPDATE suggestions SET status = ?, updated_at = ?, decided_at = ? WHERE id = ?"
+        ).run(status, now, decidedAt, id);
+      } else {
+        this.db.prepare(
+          "UPDATE suggestions SET status = ?, updated_at = ? WHERE id = ?"
+        ).run(status, now, id);
+      }
     }
 
     const updated = this.getById(id);
