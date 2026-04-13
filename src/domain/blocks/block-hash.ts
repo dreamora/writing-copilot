@@ -1,11 +1,10 @@
 // Block content hash helper
-import { createHash } from "crypto";
+import { hashString } from "./hash-string";
 
 /**
- * Compute excerpt hash: SHA-256 of first 80 chars of markdown,
- * truncated to 16 hex chars.
+ * Compute a deterministic excerpt hash from the first 80 chars of markdown.
  */
 export function computeExcerptHash(markdown: string): string {
   const excerpt = markdown.slice(0, 80);
-  return createHash("sha256").update(excerpt).digest("hex").slice(0, 16);
+  return hashString(excerpt);
 }

@@ -3,7 +3,7 @@ import type { Suggestion, SuggestionRequest } from "../../../../src/domain/sugge
 
 const API_BASE = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE)
   ? import.meta.env.VITE_API_BASE
-  : "http://localhost:3001";
+  : "";
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);

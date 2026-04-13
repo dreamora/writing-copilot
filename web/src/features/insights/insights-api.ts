@@ -3,7 +3,7 @@ import type { AcceptanceMetric, TimeMetric, HotspotMetric } from "./insights-mod
 
 const API_BASE = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE)
   ? import.meta.env.VITE_API_BASE
-  : "http://localhost:3001";
+  : "";
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);

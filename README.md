@@ -13,7 +13,7 @@ bun run dev:web
 
 Health check:
 ```bash
-curl -s http://localhost:3001/api/health
+curl -s http://localhost:8788/api/health
 ```
 
 ## Architecture

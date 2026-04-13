@@ -16,7 +16,7 @@ import type { Suggestion, SuggestionActionType } from "../../src/domain/suggesti
 import type { SelectionSpan } from "./features/editor/SelectionState";
 import { buildContextEnvelope } from "../../src/domain/suggestions/context-envelope";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_DOC = import.meta.env.VITE_DEFAULT_DOC ?? "sample.md";
 const DOCUMENT_ID = "doc-main";
 
@@ -120,10 +120,10 @@ export default function App() {
 
       {/* Tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb", marginBottom: "20px" }}>
-        <button style={TAB_STYLE(activeTab === "editor")} onClick={() => setActiveTab("editor")}>
+        <button type="button" style={TAB_STYLE(activeTab === "editor")} onClick={() => setActiveTab("editor")}>
           ✏️ Editor
         </button>
-        <button style={TAB_STYLE(activeTab === "insights")} onClick={() => setActiveTab("insights")}>
+        <button type="button" style={TAB_STYLE(activeTab === "insights")} onClick={() => setActiveTab("insights")}>
           📊 Insights {openSuggestions.length > 0 && `(${openSuggestions.length})`}
         </button>
       </div>
@@ -136,11 +136,11 @@ export default function App() {
               placeholder="Document path"
               style={{ flex: 1, padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "14px" }}
             />
-            <button onClick={handleLoad} disabled={loading}
+            <button type="button" onClick={handleLoad} disabled={loading}
               style={{ padding: "8px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
               {loading ? "Loading…" : "Load"}
             </button>
-            <button onClick={() => saveAll()} disabled={saving || blocks.length === 0 || dirtyIds.size === 0}
+            <button type="button" onClick={() => saveAll()} disabled={saving || blocks.length === 0 || dirtyIds.size === 0}
               style={{ padding: "8px 16px", background: dirtyIds.size > 0 ? "#f59e0b" : "#9ca3af", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
               {saving ? "Saving…" : `Save${dirtyIds.size > 0 ? ` (${dirtyIds.size})` : ""}`}
             </button>

@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "description": "Writing Copilot - Phase 0 skeleton",
   "scripts": {
-    "dev:api": "bun run src/api/server.ts",
+    "dev:api": "bun run db:migrate && bun run src/api/server.ts",
     "dev:web": "cd web && bun run dev",
     "db:migrate": "bun run src/db/migrate.ts",
     "test": "bun test"
@@ -21,6 +21,8 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@types/bun": "latest",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
     "typescript": "^5.3.0"
   }
 }

@@ -7,7 +7,7 @@ import { createSuggestionRoutes } from "../routes/suggestions";
 import { createTelemetryRoutes } from "../routes/telemetry";
 import { EventWriter } from "../domain/telemetry/event-writer";
 
-const API_PORT = parseInt(process.env.API_PORT || "3001", 10);
+const API_PORT = parseInt(process.env.API_PORT || "8788", 10);
 const DB_PATH = process.env.DB_PATH || "./data/copilot.db";
 const USE_STUB = !process.env.OPENAI_API_KEY || process.env.USE_STUB_PROVIDER === "true";
 

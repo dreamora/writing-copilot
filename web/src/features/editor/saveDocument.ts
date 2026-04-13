@@ -8,7 +8,7 @@ export interface SaveResult {
   savedAt: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 /**
  * Recompose blocks to markdown and POST to the API save endpoint.
