@@ -7,6 +7,7 @@ import type {
   SuggestionResponse,
 } from "../../domain/suggestions/suggestion-types";
 import type { ChatGptAuthConfig } from "./chatgpt-auth";
+import { isTokenInvalid, sanitizeAuthError } from "./token-lifecycle";
 
 const TIMEOUT_MS = 30000;
 const MAX_RETRIES = 1;
@@ -15,6 +16,7 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
   private client: OpenAI;
   private model: string;
   private temperature: number;
+  private stubProvider: StubSuggestionProvider;
 
   constructor(auth: ChatGptAuthConfig) {
     this.client = new OpenAI({
@@ -25,6 +27,7 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
     });
     this.model = auth.model ?? "gpt-4o-mini";
     this.temperature = auth.temperature ?? 0.7;
+    this.stubProvider = new StubSuggestionProvider();
   }
 
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
@@ -38,6 +41,15 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
       } catch (error) {
         lastError = error as Error;
 
+        // AC2: Graceful fallback on token/auth errors
+        if (isTokenInvalid(error)) {
+          console.warn(
+            `Token error: ${sanitizeAuthError(error)}. Falling back to stub mode.`
+          );
+          return this.stubProvider.suggest(req);
+        }
+
+        // Retry on validation errors
         if (attempt < MAX_RETRIES && this.isValidationError(lastError)) {
           console.warn(
             `Suggestion parse failed (attempt ${attempt + 1}), retrying…`,
@@ -92,16 +104,8 @@ export class StubSuggestionProvider implements SuggestionProvider {
       issueSummary: `[STUB] Improved clarity for: "${req.selection.selectedText.slice(0, 20)}..."`,
       rationale: `This ${req.actionType} improves readability.`,
       proposedText: `[IMPROVED] ${req.selection.selectedText}`,
-      riskNotes: "This is a stub response (no ChatGPT auth configured)",
+      riskNotes: "This is a stub response (no ChatGPT auth configured or token invalid)",
       confidence: 0.5,
     };
   }
-}
-
-export function createOpenAiProvider(auth: ChatGptAuthConfig): OpenAiSuggestionProvider {
-  return new OpenAiSuggestionProvider(auth);
-}
-
-export function createSuggestionProvider(auth: ChatGptAuthConfig | null): SuggestionProvider {
-  return auth ? new OpenAiSuggestionProvider(auth) : new StubSuggestionProvider();
 }
