@@ -1,10 +1,9 @@
-// App.tsx — Phase 4: tabbed UI with editor + insight cockpit + D2 compact summary
+// App.tsx — Phase 4: tabbed UI with editor + insight cockpit
 import { useState, useEffect, useCallback } from "react";
 import BlockEditor from "./features/editor/BlockEditor";
 import { useBlockEditor } from "./features/editor/blockState";
 import SuggestionThread from "./features/suggestions/SuggestionThread";
 import InsightsPage from "./features/insights/InsightsPage";
-import CompactSummary from "./features/insights/CompactSummary";
 import {
   createSuggestion,
   fetchSuggestions,
@@ -175,9 +174,6 @@ export default function App() {
 
             {blocks.length > 0 && (
               <div>
-                {/* D2: Compact insights summary in sidebar */}
-                <CompactSummary />
-                
                 <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
                   Suggestions {openSuggestions.length > 0 && `(${openSuggestions.length} open)`}
                 </div>
