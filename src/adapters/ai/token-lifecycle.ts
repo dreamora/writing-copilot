@@ -62,10 +62,11 @@ export function sanitizeAuthError(error: unknown): string {
   if (err?.status === 403) {
     return "API access denied. Check your API key permissions or quota.";
   }
-  if (err?.message?.includes("api key")) {
+  const msg = String(err?.message || "").toLowerCase();
+  if (msg.includes("api key")) {
     return "Invalid API key in auth file.";
   }
-  if (err?.message?.includes("quota")) {
+  if (msg.includes("quota")) {
     return "API quota exceeded. Check your OpenAI account.";
   }
 

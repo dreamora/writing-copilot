@@ -7,7 +7,8 @@
     "dev:api": "bun run db:migrate && bun run src/api/server.ts",
     "dev:web": "cd web && bun run dev",
     "db:migrate": "bun run src/db/migrate.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "smoke:auth": "bun run scripts/smoke-auth.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.2.0",

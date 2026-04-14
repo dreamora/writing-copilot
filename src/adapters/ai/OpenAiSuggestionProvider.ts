@@ -109,3 +109,11 @@ export class StubSuggestionProvider implements SuggestionProvider {
     };
   }
 }
+
+export function createSuggestionProvider(auth: ChatGptAuthConfig | null): SuggestionProvider {
+  return auth ? new OpenAiSuggestionProvider(auth) : new StubSuggestionProvider();
+}
+
+export function createOpenAiProvider(auth: ChatGptAuthConfig): OpenAiSuggestionProvider {
+  return new OpenAiSuggestionProvider(auth);
+}

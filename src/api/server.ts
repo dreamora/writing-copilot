@@ -126,10 +126,10 @@ const server = Bun.serve({
     if (method === "POST" && lifecycleMatch) {
       const [, id, action] = lifecycleMatch;
       let res: Response;
-      if (action === "accept") res = suggestionRoutes["POST /api/suggestions/:id/accept"](request, id!);
-      else if (action === "reject") res = suggestionRoutes["POST /api/suggestions/:id/reject"](request, id!);
+      if (action === "accept") res = await suggestionRoutes["POST /api/suggestions/:id/accept"](request, id!);
+      else if (action === "reject") res = await suggestionRoutes["POST /api/suggestions/:id/reject"](request, id!);
       else if (action === "edit-apply") res = await suggestionRoutes["POST /api/suggestions/:id/edit-apply"](request, id!);
-      else res = suggestionRoutes["POST /api/suggestions/:id/defer"](request, id!);
+      else res = await suggestionRoutes["POST /api/suggestions/:id/defer"](request, id!);
       return addCors(res);
     }
 
@@ -154,6 +154,9 @@ const server = Bun.serve({
     }
     if (method === "GET" && pathname === "/api/insights/search") {
       return addCors(telemetryRoutes["GET /api/insights/search"](request));
+    }
+    if (method === "GET" && pathname === "/api/insights/summary") {
+      return addCors(telemetryRoutes["GET /api/insights/summary"](request));
     }
 
     return addCors(json({ error: "Not found" }, 404));

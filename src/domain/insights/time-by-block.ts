@@ -10,10 +10,16 @@ export interface TimeMetric {
 
 export function queryTimeByBlock(db: Database, sessionId?: string, documentId?: string): TimeMetric[] {
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const params: string[] = [];
 
-  if (sessionId) { conditions.push("session_id = ?"); params.push(sessionId); }
-  if (documentId) { conditions.push("document_id = ?"); params.push(documentId); }
+  if (sessionId) {
+    conditions.push("session_id = ?");
+    params.push(sessionId);
+  }
+  if (documentId) {
+    conditions.push("document_id = ?");
+    params.push(documentId);
+  }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
