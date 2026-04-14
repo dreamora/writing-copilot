@@ -29,7 +29,9 @@ build/
 Thumbs.db
 
 # Database (for now, until we have backups)
-data/copilot.db
+data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # Logs
 *.log
