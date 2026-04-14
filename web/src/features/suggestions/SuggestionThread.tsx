@@ -1,4 +1,4 @@
-// Bead 2.6 — Suggestion thread + actions
+// Bead 2.6 — Suggestion thread + actions (D3 polish: failure states, loading feedback)
 import React, { useState } from "react";
 import type { Suggestion } from "../../../../src/domain/suggestions/suggestion-types";
 import SuggestionDiff from "./SuggestionDiff";
@@ -28,8 +28,61 @@ export default function SuggestionThread({
 }: SuggestionThreadProps) {
   const [showEdit, setShowEdit] = useState(false);
   const [editText, setEditText] = useState(suggestion.proposedText);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  
   const badge = STATUS_BADGES[suggestion.status] ?? STATUS_BADGES.open!;
   const isDecided = suggestion.status !== "open" && suggestion.status !== "deferred";
+
+  const handleAcceptClick = async () => {
+    setLoadingAction("accept");
+    setActionError(null);
+    try {
+      await onAccept(suggestion.id);
+    } catch (e) {
+      setActionError(`Failed to accept: ${(e as Error).message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleRejectClick = async () => {
+    setLoadingAction("reject");
+    setActionError(null);
+    try {
+      await onReject(suggestion.id);
+    } catch (e) {
+      setActionError(`Failed to reject: ${(e as Error).message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleEditApplyClick = async () => {
+    if (!editText.trim()) return;
+    setLoadingAction("edit_apply");
+    setActionError(null);
+    try {
+      await onEditApply(suggestion.id, editText);
+      setShowEdit(false);
+    } catch (e) {
+      setActionError(`Failed to apply: ${(e as Error).message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleDeferClick = async () => {
+    setLoadingAction("defer");
+    setActionError(null);
+    try {
+      await onDefer(suggestion.id);
+    } catch (e) {
+      setActionError(`Failed to defer: ${(e as Error).message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
 
   return (
     <div
@@ -86,6 +139,23 @@ export default function SuggestionThread({
         </div>
       )}
 
+      {/* Error display (D3 polish) */}
+      {actionError && (
+        <div
+          style={{
+            marginTop: "10px",
+            padding: "8px",
+            background: "#fee2e2",
+            border: "1px solid #fecaca",
+            borderRadius: "4px",
+            fontSize: "12px",
+            color: "#991b1b",
+          }}
+        >
+          ⚠ {actionError}
+        </div>
+      )}
+
       {/* Edit area */}
       {showEdit && !isDecided && (
         <div style={{ marginTop: "10px" }}>
@@ -110,80 +180,97 @@ export default function SuggestionThread({
       {suggestion.status === "open" && (
         <div style={{ display: "flex", gap: "6px", marginTop: "12px", flexWrap: "wrap" }}>
           <button
-            onClick={() => onAccept(suggestion.id)}
+            onClick={handleAcceptClick}
+            disabled={loadingAction !== null}
             style={{
               padding: "5px 12px",
-              background: "#16a34a",
+              background: loadingAction === "accept" ? "#9ca3af" : "#16a34a",
               color: "#fff",
               border: "none",
               borderRadius: "4px",
-              cursor: "pointer",
+              cursor: loadingAction !== null ? "not-allowed" : "pointer",
               fontSize: "12px",
               fontWeight: 600,
+              opacity: loadingAction !== null && loadingAction !== "accept" ? 0.5 : 1,
             }}
+            aria-label="Accept suggestion"
           >
-            ✓ Accept
+            {loadingAction === "accept" ? "Accepting…" : "✓ Accept"}
           </button>
           <button
-            onClick={() => onReject(suggestion.id)}
+            onClick={handleRejectClick}
+            disabled={loadingAction !== null}
             style={{
               padding: "5px 12px",
-              background: "#dc2626",
+              background: loadingAction === "reject" ? "#9ca3af" : "#dc2626",
               color: "#fff",
               border: "none",
               borderRadius: "4px",
-              cursor: "pointer",
+              cursor: loadingAction !== null ? "not-allowed" : "pointer",
               fontSize: "12px",
+              opacity: loadingAction !== null && loadingAction !== "reject" ? 0.5 : 1,
             }}
+            aria-label="Reject suggestion"
           >
-            ✗ Reject
+            {loadingAction === "reject" ? "Rejecting…" : "✗ Reject"}
           </button>
           {!showEdit ? (
             <button
               onClick={() => setShowEdit(true)}
+              disabled={loadingAction !== null}
               style={{
                 padding: "5px 12px",
                 background: "#f59e0b",
                 color: "#fff",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer",
+                cursor: loadingAction !== null ? "not-allowed" : "pointer",
                 fontSize: "12px",
+                opacity: loadingAction !== null ? 0.5 : 1,
               }}
+              aria-label="Edit suggestion"
             >
               ✎ Edit & Apply
             </button>
           ) : (
             <button
-              onClick={() => onEditApply(suggestion.id, editText)}
-              disabled={!editText.trim()}
+              onClick={handleEditApplyClick}
+              disabled={!editText.trim() || loadingAction !== null}
               style={{
                 padding: "5px 12px",
-                background: "#f59e0b",
+                background: loadingAction === "edit_apply" ? "#9ca3af" : "#f59e0b",
                 color: "#fff",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer",
+                cursor:
+                  !editText.trim() || loadingAction !== null
+                    ? "not-allowed"
+                    : "pointer",
                 fontSize: "12px",
                 fontWeight: 600,
+                opacity: loadingAction !== null && loadingAction !== "edit_apply" ? 0.5 : 1,
               }}
+              aria-label="Apply edited text"
             >
-              Apply Edit
+              {loadingAction === "edit_apply" ? "Applying…" : "Apply Edit"}
             </button>
           )}
           <button
-            onClick={() => onDefer(suggestion.id)}
+            onClick={handleDeferClick}
+            disabled={loadingAction !== null}
             style={{
               padding: "5px 12px",
               background: "#f3f4f6",
               color: "#374151",
               border: "1px solid #e5e7eb",
               borderRadius: "4px",
-              cursor: "pointer",
+              cursor: loadingAction !== null ? "not-allowed" : "pointer",
               fontSize: "12px",
+              opacity: loadingAction !== null && loadingAction !== "defer" ? 0.5 : 1,
             }}
+            aria-label="Defer suggestion"
           >
-            ↷ Defer
+            {loadingAction === "defer" ? "Deferring…" : "↷ Defer"}
           </button>
         </div>
       )}
