@@ -1,13 +1,40 @@
+# Dependencies
 node_modules/
-dist/
-build/
-.bun/
-*.db
-*.db-shm
-*.db-wal
-*.bak
+package-lock.json
+bun.lock
+
+# Environment
 .env
 .env.local
 .env.*.local
-*.log
+
+# Secrets (never commit auth files)
+.secrets/*
+!.secrets/*.example
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Database (for now, until we have backups)
+data/copilot.db
+
+# Logs
+*.log
+logs/
+
+# Web dev
+web/.vite/
+web/dist/

@@ -1,50 +1,43 @@
-// Bead 2.3 — OpenAI Suggestion Provider implementation
 import OpenAI from "openai";
 import { buildPrompt } from "../../domain/suggestions/prompt-builder";
 import { parseModelResponse } from "../../domain/suggestions/response-parser";
+import type { SuggestionProvider } from "./SuggestionProvider";
 import type {
-  SuggestionProvider,
   SuggestionRequest,
   SuggestionResponse,
 } from "../../domain/suggestions/suggestion-types";
+import type { ChatGptAuthConfig } from "./chatgpt-auth";
 
-const TIMEOUT_MS = 30000; // 30 second timeout per request
-const MAX_RETRIES = 1; // 1 retry on parse failure
+const TIMEOUT_MS = 30000;
+const MAX_RETRIES = 1;
 
 export class OpenAiSuggestionProvider implements SuggestionProvider {
   private client: OpenAI;
-  private model: string = "gpt-4o-mini";
-  private temperature: number = 0.7;
+  private model: string;
+  private temperature: number;
 
-  constructor(apiKey?: string, model?: string) {
+  constructor(private readonly auth: ChatGptAuthConfig) {
     this.client = new OpenAI({
-      apiKey: apiKey || process.env.OPENAI_API_KEY,
+      apiKey: auth.apiKey,
+      baseURL: auth.baseURL,
+      organization: auth.organization,
+      project: auth.project,
     });
-    if (model) {
-      this.model = model;
-    }
+    this.model = auth.model ?? "gpt-4o-mini";
+    this.temperature = auth.temperature ?? 0.7;
   }
 
-  /**
-   * Request a suggestion from OpenAI.
-   * Builds prompt, calls API, parses and validates response with retry.
-   */
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
     const prompt = buildPrompt(req);
-
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        // Call OpenAI with timeout wrapper
         const response = await this.callWithTimeout(prompt);
-
-        // Parse and validate response
         return parseModelResponse(response);
-      } catch (e) {
-        lastError = e as Error;
+      } catch (error) {
+        lastError = error as Error;
 
-        // If this is a validation error and we have retries left, try again
         if (attempt < MAX_RETRIES && this.isValidationError(lastError)) {
           console.warn(
             `Suggestion parse failed (attempt ${attempt + 1}), retrying…`,
@@ -53,18 +46,13 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
           continue;
         }
 
-        // Otherwise, throw
         throw lastError;
       }
     }
 
-    // Should not reach here, but just in case
     throw lastError || new Error("Unknown error in suggest");
   }
 
-  /**
-   * Call OpenAI API with timeout guardrail.
-   */
   private async callWithTimeout(prompt: string): Promise<string> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -78,7 +66,6 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
       });
 
       const text = response.choices[0]?.message?.content || "";
-
       if (!text) {
         throw new Error("OpenAI returned empty content");
       }
@@ -89,10 +76,6 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
     }
   }
 
-  /**
-   * Heuristic: is this a schema/parse error (retry-able)
-   * vs. a fatal error (API key, quota, etc.)?
-   */
   private isValidationError(error: Error): boolean {
     const msg = error.message.toLowerCase();
     return (
@@ -103,26 +86,18 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
   }
 }
 
-/**
- * Stub provider for development (no API key required)
- */
 export class StubSuggestionProvider implements SuggestionProvider {
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
-    // Return a deterministic stub response
     return {
       issueSummary: `[STUB] Improved clarity for: "${req.selection.selectedText.slice(0, 20)}..."`,
       rationale: `This ${req.actionType} improves readability.`,
       proposedText: `[IMPROVED] ${req.selection.selectedText}`,
-      riskNotes: "This is a stub response (no API key configured)",
+      riskNotes: "This is a stub response (no ChatGPT auth configured)",
       confidence: 0.5,
     };
   }
 }
 
-// Export factory for easy integration
-export function createOpenAiProvider(
-  apiKey?: string,
-  model?: string
-): OpenAiSuggestionProvider {
-  return new OpenAiSuggestionProvider(apiKey, model);
+export function createOpenAiProvider(auth: ChatGptAuthConfig): OpenAiSuggestionProvider {
+  return new OpenAiSuggestionProvider(auth);
 }

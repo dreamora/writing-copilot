@@ -1,0 +1,7 @@
+{
+  "apiKey": "sk-proj-...",
+  "model": "gpt-4o-mini",
+  "baseUrl": "https://api.openai.com/v1",
+  "timeout": 30000,
+  "maxRetries": 1
+}
