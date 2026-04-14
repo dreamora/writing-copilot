@@ -1,11 +1,3 @@
-/**
- * Tests for provider factory and fallback logic.
- * Verifies:
- * - Real provider created from valid auth
- * - Stub provider returned when auth is null
- * - No credentials leak in errors or logs
- */
-
 import { describe, it, expect } from "bun:test";
 import { createSuggestionProvider, StubSuggestionProvider } from "../src/adapters/ai/OpenAiSuggestionProvider";
 import type { ChatGptAuth } from "../src/adapters/auth/auth-config";
@@ -16,15 +8,16 @@ describe("createSuggestionProvider", () => {
     expect(provider).toBeInstanceOf(StubSuggestionProvider);
   });
 
-  it("returns OpenAI provider when auth is valid", () => {
+  it("returns real provider when auth is valid", () => {
     const auth: ChatGptAuth = {
       apiKey: "sk-test-key",
       model: "gpt-4o-mini",
-      timeout: 30000,
-      maxRetries: 1,
+      temperature: 0.7,
+      baseURL: "https://api.openai.com/v1",
     };
+
     const provider = createSuggestionProvider(auth);
-    // Check that it's not a stub (provider exists and can be called)
+
     expect(provider).toBeDefined();
     expect(provider).not.toBeInstanceOf(StubSuggestionProvider);
   });
@@ -34,11 +27,13 @@ describe("StubSuggestionProvider", () => {
   it("returns stub response without API calls", async () => {
     const provider = new StubSuggestionProvider();
     const response = await provider.suggest({
+      documentId: "doc-1",
+      blockId: "block-1",
       actionType: "clarify",
-      selection: { selectedText: "Hello world" },
-      context: { beforeContext: "", afterContext: "" },
+      selection: { selectedText: "Hello world", charStart: 0, charEnd: 11 },
+      context: { before: "", after: "" },
     });
-    
+
     expect(response.issueSummary).toContain("[STUB]");
     expect(response.confidence).toBe(0.5);
   });

@@ -16,7 +16,7 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
   private model: string;
   private temperature: number;
 
-  constructor(private readonly auth: ChatGptAuthConfig) {
+  constructor(auth: ChatGptAuthConfig) {
     this.client = new OpenAI({
       apiKey: auth.apiKey,
       baseURL: auth.baseURL,
@@ -100,4 +100,8 @@ export class StubSuggestionProvider implements SuggestionProvider {
 
 export function createOpenAiProvider(auth: ChatGptAuthConfig): OpenAiSuggestionProvider {
   return new OpenAiSuggestionProvider(auth);
+}
+
+export function createSuggestionProvider(auth: ChatGptAuthConfig | null): SuggestionProvider {
+  return auth ? new OpenAiSuggestionProvider(auth) : new StubSuggestionProvider();
 }

@@ -1,4 +1,3 @@
-// Writing Copilot API Server — Phase 3 (telemetry + insights)
 import { Database } from "bun:sqlite";
 import { readDoc, saveDoc } from "../lib/fs-adapter";
 import { SuggestionService } from "../domain/suggestions/suggestion-service";
@@ -6,17 +5,55 @@ import { OpenAiSuggestionProvider, StubSuggestionProvider } from "../adapters/ai
 import { createSuggestionRoutes } from "../routes/suggestions";
 import { createTelemetryRoutes } from "../routes/telemetry";
 import { EventWriter } from "../domain/telemetry/event-writer";
+import {
+  ChatGptAuthError,
+  loadChatGptAuth,
+  resolveChatGptAuthPath,
+} from "../adapters/ai/chatgpt-auth";
+import type { SuggestionProvider } from "../adapters/ai/SuggestionProvider";
 
 const API_PORT = parseInt(process.env.API_PORT || "8788", 10);
 const DB_PATH = process.env.DB_PATH || "./data/copilot.db";
-const USE_STUB = !process.env.OPENAI_API_KEY || process.env.USE_STUB_PROVIDER === "true";
 
+function createSuggestionProvider(): {
+  provider: SuggestionProvider;
+  mode: "stub" | "chatgpt";
+  authPath: string;
+  authError?: string;
+} {
+  const authPath = resolveChatGptAuthPath();
+
+  if (process.env.USE_STUB_PROVIDER === "true") {
+    return { provider: new StubSuggestionProvider(), mode: "stub", authPath };
+  }
+
+  try {
+    const auth = loadChatGptAuth();
+    return {
+      provider: new OpenAiSuggestionProvider(auth),
+      mode: "chatgpt",
+      authPath,
+    };
+  } catch (error) {
+    if (error instanceof ChatGptAuthError) {
+      return {
+        provider: new StubSuggestionProvider(),
+        mode: "stub",
+        authPath,
+        authError: error.message,
+      };
+    }
+
+    throw error;
+  }
+}
+
+const providerBootstrap = createSuggestionProvider();
 const db = new Database(DB_PATH);
 db.exec("PRAGMA journal_mode=WAL;");
 
-const provider = USE_STUB ? new StubSuggestionProvider() : new OpenAiSuggestionProvider();
 const eventWriter = new EventWriter(db);
-const suggestionService = new SuggestionService(db, provider, eventWriter);
+const suggestionService = new SuggestionService(db, providerBootstrap.provider, eventWriter);
 const suggestionRoutes = createSuggestionRoutes(suggestionService);
 const telemetryRoutes = createTelemetryRoutes(db);
 
@@ -51,7 +88,16 @@ const server = Bun.serve({
     };
 
     if (method === "GET" && pathname === "/api/health") {
-      return addCors(json({ status: "ok", timestamp: new Date().toISOString(), stubProvider: USE_STUB }));
+      return addCors(
+        json({
+          status: "ok",
+          timestamp: new Date().toISOString(),
+          stubProvider: providerBootstrap.mode === "stub",
+          providerMode: providerBootstrap.mode,
+          authPath: providerBootstrap.authPath,
+          authError: providerBootstrap.authError ?? null,
+        })
+      );
     }
 
     if (method === "GET" && pathname === "/api/docs") {
@@ -70,7 +116,6 @@ const server = Bun.serve({
       catch (err) { return addCors(json({ error: (err as Error).message }, 500)); }
     }
 
-    // Suggestions
     if (method === "POST" && pathname === "/api/suggestions") {
       return addCors(await suggestionRoutes["POST /api/suggestions"](request));
     }
@@ -88,7 +133,6 @@ const server = Bun.serve({
       return addCors(res);
     }
 
-    // Telemetry
     if (method === "POST" && pathname === "/api/telemetry/events") {
       return addCors(await telemetryRoutes["POST /api/telemetry/events"](request));
     }
@@ -99,7 +143,6 @@ const server = Bun.serve({
       return addCors(await telemetryRoutes["POST /api/telemetry/block-time"](request));
     }
 
-    // Insights
     if (method === "GET" && pathname === "/api/insights/acceptance-by-type") {
       return addCors(telemetryRoutes["GET /api/insights/acceptance-by-type"](request));
     }
@@ -118,4 +161,4 @@ const server = Bun.serve({
 });
 
 console.log(`Writing Copilot API running on http://localhost:${server.port}`);
-console.log(`Provider: ${USE_STUB ? "stub" : "OpenAI"}`);
+console.log(`Provider: ${providerBootstrap.mode}${providerBootstrap.authError ? ` (${providerBootstrap.authError})` : ""}`);
