@@ -12,6 +12,10 @@ import {
 import { buildPrompt } from "../../domain/suggestions/prompt-builder";
 import { parseModelResponse } from "../../domain/suggestions/response-parser";
 import { generateProofOfWorkToken } from "./chatgpt-sentinel";
+import {
+  buildChatGptBrowserHeaders,
+  createBrowserConversationPayload,
+} from "./chatgpt-browser";
 
 const TIMEOUT_MS = 45000;
 
@@ -31,11 +35,13 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
   private readonly temperature: number;
   private sentinelToken: string | null = null;
   private sentinelTokenExpiry: number | null = null;
+  private deviceId: string;
 
   constructor(auth: ChatGptAuthConfig) {
     this.auth = auth;
     this.model = auth.model ?? "gpt-4o-mini";
     this.temperature = auth.temperature ?? 0.7;
+    this.deviceId = randomUUID();
   }
 
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
@@ -48,17 +54,17 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
     const prompt = buildPrompt(req);
 
     try {
-      // T2: Probe sentinel requirements and solve challenges
       const requirements = await this.probeSentinelRequirements();
       if (!requirements) {
         throw new Error("Sentinel token exchange failed");
       }
 
-      // TODO (T3): Send live conversation request via browser API
-
-      throw new Error(
-        "Browser-session transport not yet implemented (T3 live request pending)"
+      const response = await this.sendBrowserConversationRequest(
+        prompt,
+        requirements
       );
+
+      return parseModelResponse(response);
     } catch (error) {
       const msg = (error as Error).message || String(error);
       console.error(`[ChatGptBrowserSession] suggestion failed: ${msg}`);
@@ -66,23 +72,141 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
     }
   }
 
-  /**
-   * Exchange OAuth token for sentinel chat requirements.
-   * Returns the requirements token or null if exchange fails.
-   */
-  private async exchangeSentinelToken(): Promise<string | null> {
+  private async sendBrowserConversationRequest(
+    prompt: string,
+    requirements: {
+      proofOfWorkToken?: string;
+      sentinelToken: string;
+    }
+  ): Promise<string> {
     const accessToken = getOpenAiAccessToken(this.auth);
-    const deviceId = randomUUID();
+    const accountId = this.auth.openai?.accountId ?? "";
+
+    const headers = buildChatGptBrowserHeaders({
+      accessToken,
+      accountId,
+      deviceId: this.deviceId,
+      sentinelToken: requirements.sentinelToken,
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    });
+
+    const payload = createBrowserConversationPayload({
+      model: this.model,
+      prompt,
+    });
+
+    if (requirements.proofOfWorkToken) {
+      (payload as Record<string, unknown>)["openai_sentinel_chat_requirements_token"] =
+        requirements.proofOfWorkToken;
+    }
 
     try {
-      const response = await fetch(
+      const response = await this.fetchWithTimeout(
+        "https://chatgpt.com/backend-api/conversation",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        },
+        TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `ChatGPT conversation failed: ${response.status} ${response.statusText}. Body: ${errorText.slice(0, 200)}`
+        );
+      }
+
+      const content = await this.collectStreamResponse(response);
+
+      if (!content) {
+        throw new Error("ChatGPT returned empty response");
+      }
+
+      return content;
+    } catch (error) {
+      const msg = (error as Error).message;
+      console.error(`[ChatGptBrowserSession] conversation request failed: ${msg}`);
+      throw error;
+    }
+  }
+
+  private async collectStreamResponse(response: Response): Promise<string> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("Response has no readable body");
+    }
+
+    let fullContent = "";
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const event = JSON.parse(line) as Record<string, unknown>;
+
+            if (event.message) {
+              const msgObj = event.message as Record<string, unknown>;
+              if (msgObj.content) {
+                const contentObj = msgObj.content as Record<string, unknown>;
+                const parts = contentObj.parts as unknown[];
+                if (Array.isArray(parts)) {
+                  fullContent = parts
+                    .map((p) => {
+                      if (typeof p === "string") return p;
+                      if (
+                        typeof p === "object" &&
+                        p &&
+                        "content" in p &&
+                        typeof (p as Record<string, unknown>).content ===
+                          "string"
+                      ) {
+                        return (p as Record<string, unknown>).content;
+                      }
+                      return "";
+                    })
+                    .join("");
+                }
+              }
+            }
+          } catch {
+            // Not valid JSON, skip
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return fullContent;
+  }
+
+  private async exchangeSentinelToken(): Promise<string | null> {
+    const accessToken = getOpenAiAccessToken(this.auth);
+
+    try {
+      const response = await this.fetchWithTimeout(
         "https://chatgpt.com/backend-api/sentinel/chat-requirements",
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,
             "OpenAI-Account-ID": this.auth.openai?.accountId ?? "",
-            "OAI-Device-Id": deviceId,
+            "OAI-Device-Id": this.deviceId,
             "Accept-Language": "en-US,en;q=0.9",
             Origin: "https://chatgpt.com",
             Referer: "https://chatgpt.com/",
@@ -91,7 +215,8 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({}),
-        }
+        },
+        TIMEOUT_MS
       );
 
       if (!response.ok) {
@@ -121,9 +246,6 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
     }
   }
 
-  /**
-   * Check if sentinel token is still valid.
-   */
   private isSentinelTokenExpired(): boolean {
     if (!this.sentinelToken || !this.sentinelTokenExpiry) {
       return true;
@@ -131,22 +253,14 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
     return Date.now() > this.sentinelTokenExpiry;
   }
 
-  /**
-   * Ensure sentinel token is fresh.
-   */
   private async ensureSentinelToken(): Promise<string | null> {
     if (!this.isSentinelTokenExpired()) {
       return this.sentinelToken;
     }
 
-    // Token expired or missing — refresh
     return this.exchangeSentinelToken();
   }
 
-  /**
-   * T2: Probe sentinel requirements and solve proof-of-work if needed.
-   * Returns proof-of-work token and sentinel token, or null on failure.
-   */
   private async probeSentinelRequirements(): Promise<{
     proofOfWorkToken?: string;
     sentinelToken: string;
@@ -159,13 +273,7 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
       return null;
     }
 
-    // Parse requirements from sentinel token (which contains embedded challenge data)
-    // In practice, the PoW challenge is encoded in the token response itself
-    // For now, we'll extract known parameters and attempt to solve
-
     try {
-      // Example: Mock challenge for now
-      // TODO (T3): Extract from actual sentinel response
       const mockChallenge = {
         seed: "chatgpt-challenge-seed",
         difficulty: "0000ff",
@@ -177,7 +285,7 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
         console.warn(
           `[ChatGptBrowserSession] PoW solving failed after ${powResult.iterations} iterations`
         );
-        return { sentinelToken }; // Return at least the sentinel token
+        return { sentinelToken };
       }
 
       console.log(
@@ -194,6 +302,22 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
       );
       return { sentinelToken };
     }
+  }
+
+  private fetchWithTimeout(
+    url: string,
+    init: RequestInit,
+    timeoutMs: number
+  ): Promise<Response> {
+    return Promise.race([
+      fetch(url, init),
+      new Promise<Response>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Timeout after ${timeoutMs}ms`)),
+          timeoutMs
+        )
+      ),
+    ]);
   }
 }
 
