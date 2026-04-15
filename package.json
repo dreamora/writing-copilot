@@ -9,7 +9,8 @@
     "db:migrate": "bun run src/db/migrate.ts",
     "test": "bun test",
     "smoke:auth": "bun run scripts/smoke-auth.ts",
-    "smoke:provider": "bun run scripts/smoke-provider.ts"
+    "smoke:provider": "bun run scripts/smoke-provider.ts",
+    "probe:chatgpt-browser": "bun run scripts/probe-chatgpt-browser.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.2.0",
@@ -25,6 +26,7 @@
     "@types/bun": "latest",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
+    "playwright": "^1.59.1",
     "typescript": "^5.3.0"
   }
 }
