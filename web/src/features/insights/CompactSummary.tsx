@@ -1,35 +1,34 @@
-// Minimal compact insights summary for D2 — shows key metrics at a glance
-import { useState, useEffect } from "react";
-import type { InsightsSummary } from "../../../../src/domain/insights/summary";
+import { useState, useEffect, useCallback } from "react";
+import { fetchInsightsSummary } from "./insights-api";
+import type { InsightsSummary } from "./insights-models";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
-const DOCUMENT_ID = "doc-main";
+interface CompactSummaryProps {
+  documentId: string;
+  sessionId?: string;
+  limit?: number;
+}
 
-export default function CompactSummary() {
+export default function CompactSummary({ documentId, sessionId, limit = 5 }: CompactSummaryProps) {
   const [data, setData] = useState<InsightsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/insights/summary?documentId=${DOCUMENT_ID}&limit=5`
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const summary = await res.json();
+      const summary = await fetchInsightsSummary(sessionId, documentId, limit);
       setData(summary);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [documentId, sessionId, limit]);
 
   useEffect(() => {
     fetchSummary();
-  }, []);
+  }, [fetchSummary]);
 
   if (!data && !error) {
     return (
@@ -104,7 +103,6 @@ export default function CompactSummary() {
         </button>
       </div>
 
-      {/* Key metrics grid */}
       <div
         style={{
           display: "grid",
@@ -119,7 +117,6 @@ export default function CompactSummary() {
         <MetricBox label="Rewrites" value={totals.rewrites} />
       </div>
 
-      {/* Status breakdown */}
       {totals.suggestions > 0 && (
         <div
           style={{

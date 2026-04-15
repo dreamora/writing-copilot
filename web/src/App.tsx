@@ -224,7 +224,7 @@ export default function App() {
             {blocks.length > 0 && (
               <div>
                 {/* D2: Compact insights summary in sidebar */}
-                <CompactSummary />
+                <CompactSummary documentId={DOCUMENT_ID} sessionId={sessionId} />
                 
                 <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
                   Suggestions {openSuggestions.length > 0 && `(${openSuggestions.length} open)`}
