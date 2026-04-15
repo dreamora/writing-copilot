@@ -1,5 +1,5 @@
 // Bead 4.2 — API adapters for insight cockpit
-import type { AcceptanceMetric, TimeMetric, HotspotMetric } from "./insights-models";
+import type { AcceptanceMetric, TimeMetric, HotspotMetric, InsightsSummary, SearchSuggestionResult } from "./insights-models";
 
 const API_BASE = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE)
   ? import.meta.env.VITE_API_BASE
@@ -32,6 +32,14 @@ export async function fetchRewritePatterns(documentId?: string): Promise<Hotspot
   return fetchJson<HotspotMetric[]>(`${API_BASE}/api/insights/rewrite-patterns${q}`);
 }
 
-export async function fetchSuggestionSearch(query: string, limit = 20): Promise<Array<{ suggestionId: string; issueSummary: string; proposedText: string; rank: number }>> {
-  return fetchJson(`${API_BASE}/api/insights/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+export async function fetchSuggestionSearch(query: string, limit = 20): Promise<SearchSuggestionResult[]> {
+  return fetchJson<SearchSuggestionResult[]>(`${API_BASE}/api/insights/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+}
+
+export async function fetchInsightsSummary(sessionId?: string, documentId?: string, limit = 10): Promise<InsightsSummary> {
+  const params = new URLSearchParams();
+  if (sessionId) params.set("sessionId", sessionId);
+  if (documentId) params.set("documentId", documentId);
+  params.set("limit", String(limit));
+  return fetchJson<InsightsSummary>(`${API_BASE}/api/insights/summary?${params.toString()}`);
 }
