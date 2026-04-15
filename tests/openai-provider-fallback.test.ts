@@ -9,7 +9,13 @@ describe("OpenAiSuggestionProvider: graceful fallback", () => {
 
   beforeEach(() => {
     const auth: ChatGptAuthConfig = {
-      apiKey: "sk-invalid-key",
+      openai: {
+        type: "oauth",
+        refresh: "refresh-token",
+        access: "expired-or-invalid-access-token",
+        expires: Date.now() + 60_000,
+        accountId: "acct-123",
+      },
       model: "gpt-4o-mini",
     };
     provider = new OpenAiSuggestionProvider(auth);
@@ -45,11 +51,25 @@ describe("OpenAiSuggestionProvider: graceful fallback", () => {
     expect(response.riskNotes).toContain("stub");
   });
 
+  it("falls back to stub when the oauth access token is expired locally", async () => {
+    const expiredProvider = new OpenAiSuggestionProvider({
+      openai: {
+        type: "oauth",
+        refresh: "refresh-token",
+        access: "access-token",
+        expires: Date.now() - 1,
+        accountId: "acct-123",
+      },
+    });
+
+    const response = await expiredProvider.suggest(testRequest);
+    expect(response.riskNotes).toMatch(/stub|expired/i);
+  });
+
   it("includes fallback indicator in response", async () => {
     (provider as unknown as { callWithTimeout: (prompt: string) => Promise<string> }).callWithTimeout =
       async () => {
-        const error = new Error("Invalid API key provided");
-        throw error;
+        throw new Error("Invalid token provided");
       };
 
     const response = await provider.suggest(testRequest);
@@ -59,11 +79,10 @@ describe("OpenAiSuggestionProvider: graceful fallback", () => {
   it("sanitizes error messages (no credential leaking)", async () => {
     (provider as unknown as { callWithTimeout: (prompt: string) => Promise<string> }).callWithTimeout =
       async () => {
-        const error = new Error("Invalid API key sk-secret-secret-secret");
-        throw error;
+        throw new Error("Invalid token access-secret-secret-secret");
       };
 
     const response = await provider.suggest(testRequest);
-    expect(JSON.stringify(response)).not.toMatch(/sk-[a-zA-Z0-9]{10,}/);
+    expect(JSON.stringify(response)).not.toContain("access-secret-secret-secret");
   });
 });

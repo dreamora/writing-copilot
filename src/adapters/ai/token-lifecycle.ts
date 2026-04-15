@@ -1,18 +1,7 @@
 /**
  * Token Lifecycle Management
  *
- * Handles token validation and graceful fallback when tokens are invalid/expired.
- * This is the "refresh cycle with retries and graceful fallback" for Epic A.
- * 
- * Scope (Epic A):
- * - Detects invalid/expired tokens via OpenAI error codes
- * - Falls back to stub mode (graceful degradation)
- * - Logs errors without exposing credentials
- * 
- * Future (Epic A.2/B):
- * - Persistent token store
- * - Background refresh jobs
- * - Token pre-expiry refresh
+ * Handles token validation and graceful fallback when OAuth access tokens are invalid/expired.
  */
 
 export class TokenError extends Error {
@@ -27,49 +16,41 @@ export class TokenError extends Error {
   }
 }
 
-/**
- * Check if an OpenAI error indicates an auth/token issue that warrants fallback
- */
 export function isTokenInvalid(error: unknown): boolean {
   const err = error as any;
 
-  // OpenAI API errors with status codes
   if (err?.status !== undefined) {
-    // 401 Unauthorized, 403 Forbidden = token issue
     return err.status === 401 || err.status === 403;
   }
 
-  // Check message patterns (no credential leaking)
-  const msg = (err?.message || "").toLowerCase();
+  const msg = String(err?.message || "").toLowerCase();
   return (
     msg.includes("invalid api key") ||
     msg.includes("api key not found") ||
+    msg.includes("invalid token") ||
+    msg.includes("expired token") ||
     msg.includes("unauthorized") ||
     msg.includes("invalid authentication") ||
-    msg.includes("quota exceeded") // This is a token-related issue too
+    msg.includes("quota exceeded")
   );
 }
 
-/**
- * Extract error message from OpenAI error without leaking credentials
- */
 export function sanitizeAuthError(error: unknown): string {
   const err = error as any;
 
   if (err?.status === 401) {
-    return "API authentication failed. Check your auth file or API key.";
+    return "API authentication failed. Check your OAuth auth file or access token.";
   }
   if (err?.status === 403) {
-    return "API access denied. Check your API key permissions or quota.";
+    return "API access denied. Check your OAuth access token permissions or quota.";
   }
   const msg = String(err?.message || "").toLowerCase();
-  if (msg.includes("api key")) {
-    return "Invalid API key in auth file.";
+  if (msg.includes("api key") || msg.includes("token")) {
+    return "Invalid OAuth access token in auth file.";
   }
   if (msg.includes("quota")) {
     return "API quota exceeded. Check your OpenAI account.";
   }
 
-  // Generic fallback
   return "API authentication error. Falling back to stub mode.";
 }

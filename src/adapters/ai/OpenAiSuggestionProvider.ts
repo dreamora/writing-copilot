@@ -7,23 +7,24 @@ import type {
   SuggestionResponse,
 } from "../../domain/suggestions/suggestion-types";
 import type { ChatGptAuthConfig } from "./chatgpt-auth";
+import { getOpenAiAccessToken, isChatGptAccessExpired } from "./chatgpt-auth";
 import { isTokenInvalid, sanitizeAuthError } from "./token-lifecycle";
 
 const TIMEOUT_MS = 30000;
 const MAX_RETRIES = 1;
 
 export class OpenAiSuggestionProvider implements SuggestionProvider {
-  private client: OpenAI;
-  private model: string;
-  private temperature: number;
-  private stubProvider: StubSuggestionProvider;
+  private readonly client: OpenAI;
+  private readonly model: string;
+  private readonly temperature: number;
+  private readonly stubProvider: StubSuggestionProvider;
+  private readonly auth: ChatGptAuthConfig;
 
   constructor(auth: ChatGptAuthConfig) {
+    this.auth = auth;
     this.client = new OpenAI({
-      apiKey: auth.apiKey,
+      apiKey: getOpenAiAccessToken(auth),
       baseURL: auth.baseURL,
-      organization: auth.organization,
-      project: auth.project,
     });
     this.model = auth.model ?? "gpt-4o-mini";
     this.temperature = auth.temperature ?? 0.7;
@@ -31,6 +32,11 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
   }
 
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
+    if (isChatGptAccessExpired(this.auth)) {
+      console.warn("OAuth access token expired before suggestion call. Falling back to stub mode.");
+      return this.stubProvider.suggest(req);
+    }
+
     const prompt = buildPrompt(req);
     let lastError: Error | null = null;
 
@@ -41,15 +47,11 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
       } catch (error) {
         lastError = error as Error;
 
-        // AC2: Graceful fallback on token/auth errors
         if (isTokenInvalid(error)) {
-          console.warn(
-            `Token error: ${sanitizeAuthError(error)}. Falling back to stub mode.`
-          );
+          console.warn(`Token error: ${sanitizeAuthError(error)}. Falling back to stub mode.`);
           return this.stubProvider.suggest(req);
         }
 
-        // Retry on validation errors
         if (attempt < MAX_RETRIES && this.isValidationError(lastError)) {
           console.warn(
             `Suggestion parse failed (attempt ${attempt + 1}), retrying…`,
@@ -104,7 +106,7 @@ export class StubSuggestionProvider implements SuggestionProvider {
       issueSummary: `[STUB] Improved clarity for: "${req.selection.selectedText.slice(0, 20)}..."`,
       rationale: `This ${req.actionType} improves readability.`,
       proposedText: `[IMPROVED] ${req.selection.selectedText}`,
-      riskNotes: "This is a stub response (no ChatGPT auth configured or token invalid)",
+      riskNotes: "This is a stub response (no ChatGPT auth configured, token expired, or token invalid)",
       confidence: 0.5,
     };
   }

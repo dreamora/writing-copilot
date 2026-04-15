@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   ChatGptAuthError,
   DEFAULT_CHATGPT_AUTH_PATH,
+  isChatGptAccessExpired,
   loadChatGptAuth,
   resolveChatGptAuthPath,
 } from "../../src/adapters/ai/chatgpt-auth";
@@ -17,6 +18,25 @@ function createTempDir(): string {
   return dir;
 }
 
+function writeOauthAuth(cwd: string, overrides: Record<string, unknown> = {}) {
+  const authPath = join(cwd, DEFAULT_CHATGPT_AUTH_PATH);
+  mkdirSync(join(cwd, ".secrets"), { recursive: true });
+  writeFileSync(
+    authPath,
+    JSON.stringify({
+      openai: {
+        type: "oauth",
+        refresh: "refresh-token",
+        access: "access-token",
+        expires: 1776691031314,
+        accountId: "user-123",
+        ...overrides,
+      },
+    }),
+    "utf8"
+  );
+}
+
 afterEach(() => {
   while (tempDirs.length) {
     const dir = tempDirs.pop();
@@ -25,16 +45,15 @@ afterEach(() => {
 });
 
 describe("chatgpt-auth", () => {
-  it("loads auth from the default path", () => {
+  it("loads oauth auth from the default path", () => {
     const cwd = createTempDir();
-    const authPath = join(cwd, DEFAULT_CHATGPT_AUTH_PATH);
-    mkdirSync(join(cwd, ".secrets"), { recursive: true });
-    writeFileSync(authPath, JSON.stringify({ apiKey: "sk-test", model: "gpt-4o-mini" }), "utf8");
+    writeOauthAuth(cwd);
 
     const auth = loadChatGptAuth({}, cwd);
 
-    expect(auth.apiKey).toBe("sk-test");
-    expect(auth.model).toBe("gpt-4o-mini");
+    expect(auth.openai.type).toBe("oauth");
+    expect(auth.openai.access).toBe("access-token");
+    expect(auth.openai.accountId).toBe("user-123");
   });
 
   it("resolves an env override path", () => {
@@ -72,11 +91,11 @@ describe("chatgpt-auth", () => {
     }
   });
 
-  it("raises a helpful error when required fields are missing", () => {
+  it("raises a helpful error when the oauth fields are missing", () => {
     const cwd = createTempDir();
     const authPath = join(cwd, DEFAULT_CHATGPT_AUTH_PATH);
     mkdirSync(join(cwd, ".secrets"), { recursive: true });
-    writeFileSync(authPath, JSON.stringify({ model: "gpt-4o-mini" }), "utf8");
+    writeFileSync(authPath, JSON.stringify({ openai: { type: "oauth", access: "token" } }), "utf8");
 
     try {
       loadChatGptAuth({}, cwd);
@@ -84,8 +103,17 @@ describe("chatgpt-auth", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ChatGptAuthError);
       expect((error as ChatGptAuthError).code).toBe("invalid-schema");
-      expect((error as Error).message).toContain("missing required fields");
-      expect((error as Error).message).toContain("apiKey");
+      expect((error as Error).message).toContain("OAuth login object under openai");
+      expect((error as Error).message).toContain("openai.refresh");
     }
+  });
+
+  it("detects expired oauth access tokens", () => {
+    const cwd = createTempDir();
+    writeOauthAuth(cwd, { expires: 1000 });
+
+    const auth = loadChatGptAuth({}, cwd);
+    expect(isChatGptAccessExpired(auth, 1001)).toBe(true);
+    expect(isChatGptAccessExpired(auth, 999)).toBe(false);
   });
 });

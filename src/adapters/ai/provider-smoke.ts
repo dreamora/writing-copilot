@@ -36,7 +36,7 @@ export function summarizeSmokeResponse(response: SuggestionResponse): ProviderSm
     return {
       ok: false,
       usedStub: true,
-      message: "Provider returned a stub fallback response. Check the auth file, API key, or quota before relying on live suggestions.",
+      message: "Provider returned a stub fallback response. Check the OAuth auth file, access token, or token expiry before relying on live suggestions.",
     };
   }
 

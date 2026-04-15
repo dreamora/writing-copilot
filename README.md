@@ -30,14 +30,17 @@ Minimal example:
 
 ```json
 {
-  "apiKey": "sk-your-openai-or-chatgpt-api-key",
-  "model": "gpt-4o-mini",
-  "temperature": 0.7,
-  "baseURL": "https://api.openai.com/v1"
+  "openai": {
+    "type": "oauth",
+    "refresh": "<token>",
+    "access": "<token>",
+    "expires": 1776691031314,
+    "accountId": "<uid>"
+  }
 }
 ```
 
-If auth is missing or malformed, `/api/health` reports the resolved auth path and an actionable auth error while the app stays in stub mode.
+If auth is missing, malformed, or the access token is expired, `/api/health` reports the resolved auth path and an actionable auth error while the app stays in stub mode.
 
 ## Architecture
 

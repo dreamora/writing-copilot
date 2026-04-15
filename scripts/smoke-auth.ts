@@ -1,4 +1,8 @@
-import { loadChatGptAuth, resolveChatGptAuthPath } from "../src/adapters/ai/chatgpt-auth";
+import {
+  isChatGptAccessExpired,
+  loadChatGptAuth,
+  resolveChatGptAuthPath,
+} from "../src/adapters/ai/chatgpt-auth";
 
 try {
   const auth = loadChatGptAuth();
@@ -7,9 +11,14 @@ try {
       {
         ok: true,
         authPath: resolveChatGptAuthPath(),
+        authType: auth.openai.type,
+        accountId: auth.openai.accountId,
+        hasAccessToken: Boolean(auth.openai.access),
+        hasRefreshToken: Boolean(auth.openai.refresh),
+        expires: auth.openai.expires,
+        expired: isChatGptAccessExpired(auth),
         model: auth.model ?? "gpt-4o-mini",
         baseURL: auth.baseURL ?? "https://api.openai.com/v1",
-        hasApiKey: Boolean(auth.apiKey),
       },
       null,
       2

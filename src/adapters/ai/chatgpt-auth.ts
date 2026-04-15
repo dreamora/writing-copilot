@@ -5,15 +5,22 @@ import { z } from "zod";
 export const DEFAULT_CHATGPT_AUTH_PATH = ".secrets/chatgpt-auth.json";
 export const CHATGPT_AUTH_ENV_VAR = "CHATGPT_AUTH_PATH";
 
+const OpenAiOauthSchema = z.object({
+  type: z.literal("oauth"),
+  refresh: z.string().min(1, "openai.refresh is required"),
+  access: z.string().min(1, "openai.access is required"),
+  expires: z.number().int().positive("openai.expires must be a unix millisecond timestamp"),
+  accountId: z.string().min(1, "openai.accountId is required"),
+});
+
 const ChatGptAuthSchema = z.object({
-  apiKey: z.string().min(1, "apiKey is required"),
+  openai: OpenAiOauthSchema,
   model: z.string().min(1).optional(),
   baseURL: z.string().url().optional(),
-  organization: z.string().min(1).optional(),
-  project: z.string().min(1).optional(),
   temperature: z.number().min(0).max(2).optional(),
 });
 
+export type OpenAiOauthAuth = z.infer<typeof OpenAiOauthSchema>;
 export type ChatGptAuthConfig = z.infer<typeof ChatGptAuthSchema>;
 export type ChatGptAuth = ChatGptAuthConfig;
 
@@ -39,6 +46,14 @@ export function resolveChatGptAuthPath(
 ): string {
   const configured = env[CHATGPT_AUTH_ENV_VAR]?.trim() || DEFAULT_CHATGPT_AUTH_PATH;
   return resolve(cwd, configured);
+}
+
+export function getOpenAiAccessToken(auth: ChatGptAuthConfig): string {
+  return auth.openai.access;
+}
+
+export function isChatGptAccessExpired(auth: ChatGptAuthConfig, now = Date.now()): boolean {
+  return auth.openai.expires <= now;
 }
 
 export function loadChatGptAuth(
@@ -84,7 +99,7 @@ export function loadChatGptAuth(
       .join(", ");
     throw new ChatGptAuthError(
       "invalid-schema",
-      `ChatGPT auth file at ${authPath} is missing required fields or has invalid values (${issues}). Update the file to match .secrets/chatgpt-auth.json.example.`,
+      `ChatGPT auth file at ${authPath} must contain an OAuth login object under openai (${issues}). Update the file to match .secrets/chatgpt-auth.json.example.`,
       authPath
     );
   }

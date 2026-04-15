@@ -23,6 +23,11 @@ describe("token-lifecycle: AC2 Validation", () => {
       expect(isTokenInvalid(error)).toBe(true);
     });
 
+    it("detects invalid token message", () => {
+      const error = { message: "Invalid token provided" };
+      expect(isTokenInvalid(error)).toBe(true);
+    });
+
     it("detects quota exceeded as token-related", () => {
       const error = { message: "Quota exceeded for model gpt-4o-mini" };
       expect(isTokenInvalid(error)).toBe(true);
@@ -42,24 +47,23 @@ describe("token-lifecycle: AC2 Validation", () => {
 
   describe("sanitizeAuthError", () => {
     it("sanitizes 401 without leaking credentials", () => {
-      const error = { status: 401, message: "Unauthorized with key sk-..." };
+      const error = { status: 401, message: "Unauthorized with token access-secret" };
       const sanitized = sanitizeAuthError(error);
-      expect(sanitized).not.toContain("sk-");
+      expect(sanitized).not.toContain("access-secret");
       expect(sanitized).toContain("authentication failed");
     });
 
     it("sanitizes 403 without leaking credentials", () => {
-      const error = { status: 403, message: "Forbidden - check your API key sk-..." };
+      const error = { status: 403, message: "Forbidden - check your token access-secret" };
       const sanitized = sanitizeAuthError(error);
-      expect(sanitized).not.toContain("sk-");
+      expect(sanitized).not.toContain("access-secret");
       expect(sanitized).toContain("access denied");
     });
 
-    it("provides actionable message for invalid API key", () => {
-      const error = { message: "Invalid API key provided" };
+    it("provides actionable message for invalid OAuth token", () => {
+      const error = { message: "Invalid token provided" };
       const sanitized = sanitizeAuthError(error);
-      expect(sanitized).toContain("Invalid API key in auth file");
-      expect(sanitized).not.toContain("sk-");
+      expect(sanitized).toContain("Invalid OAuth access token in auth file");
     });
 
     it("provides actionable message for quota exceeded", () => {

@@ -8,9 +8,15 @@ describe("createSuggestionProvider", () => {
     expect(provider).toBeInstanceOf(StubSuggestionProvider);
   });
 
-  it("returns real provider when auth is valid", () => {
+  it("returns real provider when oauth auth is valid", () => {
     const auth: ChatGptAuth = {
-      apiKey: "sk-test-key",
+      openai: {
+        type: "oauth",
+        refresh: "refresh-token",
+        access: "access-token",
+        expires: Date.now() + 60_000,
+        accountId: "acct-123",
+      },
       model: "gpt-4o-mini",
       temperature: 0.7,
       baseURL: "https://api.openai.com/v1",

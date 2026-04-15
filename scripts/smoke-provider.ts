@@ -1,5 +1,9 @@
 import { OpenAiSuggestionProvider } from "../src/adapters/ai/OpenAiSuggestionProvider";
-import { loadChatGptAuth, resolveChatGptAuthPath } from "../src/adapters/ai/chatgpt-auth";
+import {
+  isChatGptAccessExpired,
+  loadChatGptAuth,
+  resolveChatGptAuthPath,
+} from "../src/adapters/ai/chatgpt-auth";
 import {
   buildProviderSmokeRequest,
   summarizeSmokeResponse,
@@ -17,6 +21,9 @@ try {
           ok: true,
           dryRun: true,
           authPath: resolveChatGptAuthPath(),
+          authType: auth.openai.type,
+          accountId: auth.openai.accountId,
+          expired: isChatGptAccessExpired(auth),
           request: buildProviderSmokeRequest(),
         },
         null,
@@ -24,6 +31,23 @@ try {
       )
     );
     process.exit(0);
+  }
+
+  if (isChatGptAccessExpired(auth)) {
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          code: "expired-token",
+          authPath: resolveChatGptAuthPath(),
+          expires: auth.openai.expires,
+          message: "OAuth access token is expired. Refresh the ChatGPT login before running a live provider smoke test.",
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
   }
 
   const provider = new OpenAiSuggestionProvider(auth);
