@@ -23,19 +23,43 @@ const DOCUMENT_ID = "doc-main";
 
 type Tab = "editor" | "insights";
 
+type ApiHealth = {
+  status: string;
+  providerMode?: "stub" | "chatgpt";
+  stubProvider?: boolean;
+  authError?: string | null;
+  authPath?: string;
+};
+
+function createSessionId(): string {
+  const maybeCrypto = globalThis.crypto as Crypto | undefined;
+  if (maybeCrypto?.randomUUID) return maybeCrypto.randomUUID();
+  return `session-${Date.now()}`;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("editor");
   const [apiStatus, setApiStatus] = useState<"loading" | "ok" | "error">("loading");
+  const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null);
   const [docPath, setDocPath] = useState(DEFAULT_DOC);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loadingSuggestionBlock, setLoadingSuggestionBlock] = useState<string | undefined>();
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [sessionId] = useState(() => createSessionId());
 
   const { blocks, loading, saving, error, dirtyIds, updateBlock, saveAll, loadDoc } = useBlockEditor();
 
   useEffect(() => {
     fetch(`${API_BASE}/api/health`)
-      .then((r) => (r.ok ? setApiStatus("ok") : setApiStatus("error")))
+      .then(async (r) => {
+        if (!r.ok) {
+          setApiStatus("error");
+          return;
+        }
+        const payload = (await r.json()) as ApiHealth;
+        setApiHealth(payload);
+        setApiStatus("ok");
+      })
       .catch(() => setApiStatus("error"));
   }, []);
 
@@ -55,40 +79,42 @@ export default function App() {
     setSuggestionError(null);
     try {
       const context = buildContextEnvelope(blocks, blockId);
-      const newSug = await createSuggestion({ documentId: DOCUMENT_ID, blockId, selection, actionType, customInstruction, context });
+      const newSug = await createSuggestion({ documentId: DOCUMENT_ID, blockId, selection, actionType, customInstruction, context, sessionId });
       setSuggestions((prev) => [newSug, ...prev]);
     } catch (e) {
       setSuggestionError((e as Error).message);
     } finally {
       setLoadingSuggestionBlock(undefined);
     }
-  }, [blocks]);
+  }, [blocks, sessionId]);
 
   const handleAccept = useCallback(async (id: string) => {
-    const updated = await acceptSuggestion(id);
+    const updated = await acceptSuggestion(id, sessionId);
     const s = suggestions.find((x) => x.id === id);
     if (s) updateBlock(s.blockId, updated.proposedText);
     setSuggestions((prev) => prev.map((x) => x.id === id ? updated : x));
-  }, [suggestions, updateBlock]);
+  }, [sessionId, suggestions, updateBlock]);
 
   const handleReject = useCallback(async (id: string) => {
-    setSuggestions((prev) => prev.map((x) => x.id === id ? { ...x, status: "rejected" as const } : x));
-    await rejectSuggestion(id).catch(() => {});
-  }, []);
+    const updated = await rejectSuggestion(id, sessionId);
+    setSuggestions((prev) => prev.map((x) => x.id === id ? updated : x));
+  }, [sessionId]);
 
   const handleEditApply = useCallback(async (id: string, editedText: string) => {
-    const updated = await editApplySuggestion(id, editedText);
+    const updated = await editApplySuggestion(id, editedText, sessionId);
     const s = suggestions.find((x) => x.id === id);
     if (s) updateBlock(s.blockId, editedText);
     setSuggestions((prev) => prev.map((x) => x.id === id ? updated : x));
-  }, [suggestions, updateBlock]);
+  }, [sessionId, suggestions, updateBlock]);
 
   const handleDefer = useCallback(async (id: string) => {
-    const updated = await deferSuggestion(id);
+    const updated = await deferSuggestion(id, sessionId);
     setSuggestions((prev) => prev.map((x) => x.id === id ? updated : x));
-  }, []);
+  }, [sessionId]);
 
   const openSuggestions = suggestions.filter((s) => s.status === "open" || s.status === "deferred");
+
+  const providerBadgeLabel = apiHealth?.providerMode === "chatgpt" ? "AI live" : apiHealth?.providerMode === "stub" ? "AI stub" : "AI unknown";
 
   const TAB_STYLE = (active: boolean) => ({
     padding: "8px 16px",
@@ -106,18 +132,40 @@ export default function App() {
       {/* Global header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "16px", marginBottom: "0" }}>
         <h1 style={{ fontSize: "18px", fontWeight: 700, margin: 0 }}>Writing Copilot</h1>
-        <span
-          style={{
-            fontSize: "11px",
-            padding: "2px 8px",
-            borderRadius: "10px",
-            background: apiStatus === "ok" ? "#d1fae5" : apiStatus === "error" ? "#fee2e2" : "#f3f4f6",
-            color: apiStatus === "ok" ? "#065f46" : apiStatus === "error" ? "#991b1b" : "#6b7280",
-          }}
-        >
-          API {apiStatus}
-        </span>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <span
+            style={{
+              fontSize: "11px",
+              padding: "2px 8px",
+              borderRadius: "10px",
+              background: apiStatus === "ok" ? "#d1fae5" : apiStatus === "error" ? "#fee2e2" : "#f3f4f6",
+              color: apiStatus === "ok" ? "#065f46" : apiStatus === "error" ? "#991b1b" : "#6b7280",
+            }}
+          >
+            API {apiStatus}
+          </span>
+          {apiStatus === "ok" && (
+            <span
+              style={{
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "10px",
+                background: apiHealth?.providerMode === "chatgpt" ? "#dbeafe" : "#fef3c7",
+                color: apiHealth?.providerMode === "chatgpt" ? "#1d4ed8" : "#92400e",
+              }}
+              title={apiHealth?.authError ?? apiHealth?.authPath ?? providerBadgeLabel}
+            >
+              {providerBadgeLabel}
+            </span>
+          )}
+        </div>
       </div>
+
+      {apiHealth?.authError && (
+        <div style={{ background: "#fef3c7", color: "#92400e", padding: "10px", borderRadius: "4px", marginTop: "12px", marginBottom: "12px", fontSize: "13px" }}>
+          ⚠ Live AI is not ready yet: {apiHealth.authError}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb", marginBottom: "20px" }}>
