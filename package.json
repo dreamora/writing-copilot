@@ -10,7 +10,8 @@
     "test": "bun test",
     "smoke:auth": "bun run scripts/smoke-auth.ts",
     "smoke:provider": "bun run scripts/smoke-provider.ts",
-    "probe:chatgpt-browser": "bun run scripts/probe-chatgpt-browser.ts"
+    "probe:chatgpt-browser": "bun run scripts/probe-chatgpt-browser.ts",
+    "probe:chatgpt-sentinel": "python3 scripts/probe-chatgpt-sentinel.py"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.2.0",
