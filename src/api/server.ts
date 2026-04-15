@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { readDoc, saveDoc } from "../lib/fs-adapter";
 import { SuggestionService } from "../domain/suggestions/suggestion-service";
 import { OpenAiSuggestionProvider, StubSuggestionProvider } from "../adapters/ai/OpenAiSuggestionProvider";
+import { createChatGptBrowserSessionProvider } from "../adapters/ai/ChatGptBrowserSessionProvider";
 import { createSuggestionRoutes } from "../routes/suggestions";
 import { createTelemetryRoutes } from "../routes/telemetry";
 import { EventWriter } from "../domain/telemetry/event-writer";
@@ -17,7 +18,7 @@ const DB_PATH = process.env.DB_PATH || "./data/copilot.db";
 
 function createSuggestionProvider(): {
   provider: SuggestionProvider;
-  mode: "stub" | "chatgpt";
+  mode: "stub" | "chatgpt" | "browser-session";
   authPath: string;
   authError?: string;
 } {
@@ -25,6 +26,24 @@ function createSuggestionProvider(): {
 
   if (process.env.USE_STUB_PROVIDER === "true") {
     return { provider: new StubSuggestionProvider(), mode: "stub", authPath };
+  }
+
+  // T4: Browser-session transport (experimental)
+  if (process.env.USE_BROWSER_SESSION_TRANSPORT === "true") {
+    try {
+      const auth = loadChatGptAuth();
+      return {
+        provider: createChatGptBrowserSessionProvider(auth),
+        mode: "browser-session",
+        authPath,
+      };
+    } catch (error) {
+      console.warn(
+        "[Server] Browser-session transport failed, falling back to OpenAI SDK:",
+        (error as Error).message
+      );
+      // Fall through to OpenAI provider
+    }
   }
 
   try {
