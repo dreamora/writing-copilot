@@ -48,7 +48,7 @@ describe("ChatGptBrowserSessionProvider", () => {
     }
   });
 
-  it("throws on suggest call (T2-T3 placeholder)", async () => {
+  it("throws on suggest call — T2-T3 placeholder", async () => {
     const provider = new ChatGptBrowserSessionProvider(mockAuth);
 
     try {
@@ -66,5 +66,53 @@ describe("ChatGptBrowserSessionProvider", () => {
       const msg = (error as Error).message;
       expect(msg).toContain("not yet implemented");
     }
+  });
+});
+
+describe("sentinel requirements parsing", () => {
+  it("parses basic sentinel response", async () => {
+    const { parseSentinelResponse } = await import(
+      "../../src/adapters/ai/sentinel-requirements"
+    );
+
+    const response = parseSentinelResponse({
+      token: "sentinel-token-abc123",
+      proofofwork: {
+        required: true,
+        difficulty: "00ffff",
+        seed: "pow-seed",
+      },
+    });
+
+    expect(response?.token).toBe("sentinel-token-abc123");
+    expect(response?.proofofwork?.required).toBe(true);
+    expect(response?.proofofwork?.difficulty).toBe("00ffff");
+  });
+
+  it("returns null for invalid sentinel response", async () => {
+    const { parseSentinelResponse } = await import(
+      "../../src/adapters/ai/sentinel-requirements"
+    );
+
+    const response = parseSentinelResponse({
+      // missing token
+      data: "invalid",
+    });
+
+    expect(response).toBe(null);
+  });
+
+  it("handles missing proofofwork requirement", async () => {
+    const { parseSentinelResponse } = await import(
+      "../../src/adapters/ai/sentinel-requirements"
+    );
+
+    const response = parseSentinelResponse({
+      token: "sentinel-token",
+      // no proofofwork
+    });
+
+    expect(response?.token).toBe("sentinel-token");
+    expect(response?.proofofwork).toBeUndefined();
   });
 });
