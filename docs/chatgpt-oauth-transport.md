@@ -57,3 +57,41 @@ A future live transport likely needs one of these:
 - Keep OAuth contract + smoke tooling in place.
 - Keep stub fallback behavior explicit and user-visible.
 - Treat live ChatGPT transport as a separate blocker/workstream, not as a silent failure.
+
+---
+
+## Implementation Status (2026-04-15)
+
+### Browser-Session Transport — Now Available
+
+A dedicated `ChatGptBrowserSessionProvider` has been implemented to use OAuth-backed browser session transport:
+
+**Files:**
+- `src/adapters/ai/ChatGptBrowserSessionProvider.ts` — Main provider class
+- `src/adapters/ai/sentinel-requirements.ts` — Challenge requirement parsing
+- `tests/unit/chatgpt-browser-session.test.ts` — Unit tests
+
+**Activation:**
+```bash
+USE_BROWSER_SESSION_TRANSPORT=true npm run dev
+```
+
+**Lifecycle:**
+1. Exchange OAuth token for sentinel token via `/backend-api/sentinel/chat-requirements`
+2. Parse requirements for proof-of-work challenge
+3. Solve PoW challenge using `generateProofOfWorkToken()`
+4. Send authenticated conversation request to `/backend-api/conversation`
+5. Stream and collect live ChatGPT response
+
+**Known Limitations:**
+- Proof-of-work challenge is currently mocked (placeholder)
+- Real sentinel response parsing needed for production use
+- Requires network access to chatgpt.com
+
+**Fallback Behavior:**
+If browser-session transport fails at any step, the system gracefully falls back to the standard OpenAI provider (if configured) or stub mode.
+
+**Provider Selection Hierarchy:**
+1. `USE_STUB_PROVIDER=true` → StubSuggestionProvider
+2. `USE_BROWSER_SESSION_TRANSPORT=true` → ChatGptBrowserSessionProvider (with OpenAI fallback)
+3. Default → OpenAiSuggestionProvider
