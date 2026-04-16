@@ -17,6 +17,8 @@ Health check:
 curl -s http://localhost:8788/api/health
 ```
 
+After building the web bundle, the API server also serves `web/dist` for non-API routes, so `http://localhost:8788/` loads the UI shell (with API routes still at `/api/*`).
+
 ## ChatGPT auth setup
 
 First iteration uses a local auth JSON file:

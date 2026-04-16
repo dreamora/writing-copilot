@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { resolve } from 'node:path';
 import { readDoc, saveDoc } from "../lib/fs-adapter";
 import { SuggestionService } from "../domain/suggestions/suggestion-service";
 import { OpenAiSuggestionProvider, StubSuggestionProvider } from "../adapters/ai/OpenAiSuggestionProvider";
@@ -14,6 +15,7 @@ import {
 import type { SuggestionProvider } from "../adapters/ai/SuggestionProvider";
 
 const API_PORT = parseInt(process.env.API_PORT || "8788", 10);
+const WEB_DIST_DIR = resolve(process.cwd(), "web", "dist");
 const DB_PATH = process.env.DB_PATH || "./data/copilot.db";
 
 function createSuggestionProvider(): {
@@ -69,6 +71,53 @@ function createSuggestionProvider(): {
 
 const providerBootstrap = createSuggestionProvider();
 const db = new Database(DB_PATH);
+
+type StaticResult = Response | null;
+
+async function serveStaticFile(urlPath: string): Promise<StaticResult> {
+  if (!urlPath || urlPath.includes('..')) {
+    return null;
+  }
+
+  const normalizedCandidates = new Set<string>([
+    urlPath === '/' ? '/index.html' : urlPath,
+    `${urlPath.endsWith('/') ? `${urlPath}index.html` : `${urlPath}.html`}`,
+  ]);
+
+  if (urlPath.startsWith('/')) {
+    const stripped = urlPath.slice(1);
+    const slashIndex = stripped.indexOf('/');
+    if (slashIndex >= 0 && stripped.length > 1) {
+      normalizedCandidates.add('/' + stripped.slice(slashIndex + 1));
+    }
+  }
+
+  for (const candidate of normalizedCandidates) {
+    if (!candidate || candidate === '/') {
+      continue;
+    }
+
+    const candidatePath = resolve(WEB_DIST_DIR + candidate);
+    if (!candidatePath.startsWith(resolve(WEB_DIST_DIR) + '/')) {
+      continue;
+    }
+
+    const file = Bun.file(candidatePath);
+    if (!(await file.exists())) {
+      continue;
+    }
+
+    return new Response(file, {
+      headers: {
+        'Content-Type': candidate.endsWith('.html') ? 'text/html' : file.type || 'application/octet-stream',
+        'Cache-Control': 'public, max-age=0',
+      },
+    });
+  }
+
+  return null;
+}
+
 db.exec("PRAGMA journal_mode=WAL;");
 
 const eventWriter = new EventWriter(db);
@@ -178,7 +227,16 @@ const server = Bun.serve({
       return addCors(telemetryRoutes["GET /api/insights/summary"](request));
     }
 
-    return addCors(json({ error: "Not found" }, 404));
+    const staticResponse = await serveStaticFile(pathname);
+    if (staticResponse) {
+      return staticResponse;
+    }
+
+    if (method === "GET" && pathname.startsWith("/api")) {
+      return addCors(json({ error: "Not found" }, 404));
+    }
+
+    return (await serveStaticFile('/index.html')) ?? new Response("Not found");
   },
 });
 
