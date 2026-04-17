@@ -142,9 +142,8 @@ export class CodexSuggestionProvider implements SuggestionProvider {
           stderr: stderrChunks.join(""),
         };
 
-        this.cleanup(workDir);
-
         if (code !== 0) {
+          this.cleanup(workDir);
           const details = [
             `Codex command failed with code ${code ?? "(signal " + signal + ")"}`,
             result.stderr && `stderr: ${result.stderr.slice(0, 2000)}`,
@@ -163,7 +162,14 @@ export class CodexSuggestionProvider implements SuggestionProvider {
           }
           resolve(raw);
         } catch (error) {
-          reject(error as Error);
+          const message = error instanceof Error ? error.message : String(error);
+          reject(
+            new Error(
+              `Failed to read Codex output file at ${outputPath}: ${message}. stdout: ${result.stdout.slice(0, 1000)} stderr: ${result.stderr.slice(0, 1000)}`
+            )
+          );
+        } finally {
+          this.cleanup(workDir);
         }
       });
     });
