@@ -197,9 +197,9 @@ function getCodexOutputSchema(): Record<string, unknown> {
       rationale: { type: "string", minLength: 1 },
       proposedText: { type: "string", minLength: 1 },
       riskNotes: { type: ["string", "null"] },
-      confidence: { type: "number", minimum: 0, maximum: 1 },
+      confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
     },
-    required: ["issueSummary", "rationale", "proposedText"],
+    required: ["issueSummary", "rationale", "proposedText", "riskNotes", "confidence"],
     additionalProperties: false,
   };
 }

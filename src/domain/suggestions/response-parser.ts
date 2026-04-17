@@ -7,7 +7,7 @@ const SuggestionResponseSchema = z.object({
   rationale: z.string().min(1),
   proposedText: z.string().min(1),
   riskNotes: z.string().nullable().optional(),
-  confidence: z.number().min(0).max(1).optional(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
 });
 
 /**
@@ -47,6 +47,6 @@ export function parseModelResponse(raw: string): SuggestionResponse {
     rationale: result.data.rationale,
     proposedText: result.data.proposedText,
     riskNotes: result.data.riskNotes ?? undefined,
-    confidence: result.data.confidence,
+    confidence: result.data.confidence ?? undefined,
   };
 }
