@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { resolve } from 'node:path';
+import { spawnSync } from "node:child_process";
 import { readDoc, saveDoc } from "../lib/fs-adapter";
 import { SuggestionService } from "../domain/suggestions/suggestion-service";
 import { OpenAiSuggestionProvider, StubSuggestionProvider } from "../adapters/ai/OpenAiSuggestionProvider";
@@ -80,7 +81,7 @@ function createSuggestionProvider(): {
     }
   }
 
-  if (process.env.USE_CODEX_PROVIDER === "true") {
+  if (auth.openai.type === "api-key" && isCodexCliAvailable()) {
     try {
       return {
         provider: new CodexSuggestionProvider(auth),
@@ -94,7 +95,7 @@ function createSuggestionProvider(): {
         mode: "stub",
         authPath,
         authError:
-          "Codex CLI provider is enabled but not available. Install / configure codex CLI and OPENAI_API_KEY, or disable USE_CODEX_PROVIDER.",
+          "Codex CLI provider was selected but is not available. Install / configure codex CLI and OPENAI_API_KEY to use live suggestions, or keep OPENAI_API_KEY unset to fall back to stub mode.",
       };
     }
   }
@@ -104,6 +105,23 @@ function createSuggestionProvider(): {
     mode: "chatgpt",
     authPath,
   };
+}
+
+function isCodexCliAvailable(): boolean {
+  const command = (process.env.CODEX_CLI_COMMAND || "codex").trim() || "codex";
+
+  try {
+    const result = spawnSync(command, ["--version"], {
+      stdio: "ignore",
+      timeout: 1500,
+    });
+    if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 

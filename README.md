@@ -21,16 +21,16 @@ After building the web bundle, the API server also serves `web/dist` for non-API
 
 ## ChatGPT auth setup
 
-Bun now supports three authentication modes:
+Bun supports three operational modes:
 
 1. **OpenAI API key path (recommended for reliability)**
    - set `OPENAI_API_KEY=sk-...`
    - optional: `OPENAI_MODEL`, `OPENAI_TEMPERATURE`
    - by default this uses the OpenAI SDK provider
-   - to force Codex CLI transport, set `USE_CODEX_PROVIDER=true`
 
-2. **Codex CLI transport mode**
-   - requires `OPENAI_API_KEY` and `USE_CODEX_PROVIDER=true`
+2. **Codex CLI transport (auto-select if available)**
+   - set `OPENAI_API_KEY=sk-...`
+   - Bun automatically switches to Codex when `codex` is discoverable on PATH (or `CODEX_CLI_COMMAND` is set)
    - optional transport knobs: `CODEX_CLI_COMMAND`, `CODEX_MODEL`, `CODEX_TIMEOUT_MS`, `CODEX_SKIP_GIT_REPO_CHECK=...`
 
 3. **OAuth browser-session path**
