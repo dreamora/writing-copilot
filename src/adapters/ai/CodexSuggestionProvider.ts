@@ -26,20 +26,16 @@ const OUTPUT_FILE_NAME = "codex-last-message.json";
 const SCHEMA_FILE_NAME = "codex-output-schema.json";
 
 export class CodexSuggestionProvider implements SuggestionProvider {
-  private readonly auth: ChatGptAuthConfig;
+  private readonly auth?: ChatGptAuthConfig;
   private readonly command: string;
   private readonly model: string;
   private readonly timeoutMs: number;
   private readonly stubProvider: StubSuggestionProvider;
 
-  constructor(auth: ChatGptAuthConfig) {
-    if (auth.openai.type !== "api-key") {
-      throw new Error("Codex transport supports API-key mode only.");
-    }
-
+  constructor(auth?: ChatGptAuthConfig) {
     this.auth = auth;
     this.command = process.env.CODEX_CLI_COMMAND?.trim() || "codex";
-    this.model = process.env.CODEX_MODEL?.trim() || auth.model || DEFAULT_CODEX_MODEL;
+    this.model = process.env.CODEX_MODEL?.trim() || auth?.model || DEFAULT_CODEX_MODEL;
     this.timeoutMs = Number(process.env.CODEX_TIMEOUT_MS || String(DEFAULT_TIMEOUT_MS));
     this.stubProvider = new StubSuggestionProvider();
   }
@@ -81,8 +77,14 @@ export class CodexSuggestionProvider implements SuggestionProvider {
     return new Promise<string>((resolve, reject) => {
       const env = {
         ...process.env,
-        OPENAI_API_KEY: this.getApiKey(),
-      };
+      } as NodeJS.ProcessEnv;
+
+      delete env.OPENAI_API_KEY;
+
+      const apiKey = this.getApiKey();
+      if (apiKey) {
+        env.OPENAI_API_KEY = apiKey;
+      }
 
       const args = [
         "exec",
@@ -173,7 +175,7 @@ export class CodexSuggestionProvider implements SuggestionProvider {
   }
 
   private getApiKey(): string {
-    if (this.auth.openai.type === "api-key") {
+    if (this.auth?.openai.type === "api-key") {
       return this.auth.openai.apiKey;
     }
 
@@ -181,7 +183,7 @@ export class CodexSuggestionProvider implements SuggestionProvider {
   }
 }
 
-export function createCodexProvider(auth: ChatGptAuthConfig): CodexSuggestionProvider {
+export function createCodexProvider(auth?: ChatGptAuthConfig): CodexSuggestionProvider {
   return new CodexSuggestionProvider(auth);
 }
 

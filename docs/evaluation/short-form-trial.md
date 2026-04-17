@@ -11,7 +11,7 @@
 
 - [ ] Writing Copilot API server running (`bun run dev:api`)
 - [ ] Writing Copilot web UI running (`bun run dev:web`)
-- [ ] OPENAI_API_KEY set in `.env`
+- [ ] Live provider available (`codex` logged in, or `OPENAI_API_KEY` set as fallback)
 - [ ] Sample markdown file exists in `docs/`
 - [ ] Trial log template open and ready to fill
 - [ ] **Clock not started yet**

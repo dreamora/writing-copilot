@@ -1,39 +1,39 @@
 # ChatGPT Auth Setup — Writing Copilot
 
-## Auth loading priority (highest first)
+## Auth loading priority (fallback paths)
 
-1. `OPENAI_API_KEY` environment variable (API-key mode)
-2. `.secrets/chatgpt-auth.json` (file-based)
-3. `CHATGPT_AUTH_PATH` (path override)
+1. Codex CLI session (preferred when `codex` is installed and logged in)
+2. `OPENAI_API_KEY` environment variable (API-key mode)
+3. `.secrets/chatgpt-auth.json` (file-based OAuth or api-key config)
+4. `CHATGPT_AUTH_PATH` (path override)
 
-If `OPENAI_API_KEY` is set, it takes precedence and is treated as `openai.type: "api-key"`.
+If `codex` is available, the server uses Codex first and does not require `OPENAI_API_KEY`.
+If `OPENAI_API_KEY` is set, it is only used for the OpenAI SDK fallback path unless explicit api-key auth is passed into Codex.
 
 ## Provider modes
 
-Bun can use two API key transport modes (plus OAuth/browser-session):
+Bun can use two non-stub live transport modes (plus OAuth/browser-session):
 
-### 1) OpenAI SDK provider (default)
+### 1) Codex CLI provider (default when available)
+
+```bash
+# no API key required if `codex` is already logged in
+export CODEX_CLI_COMMAND="codex"   # optional override
+export CODEX_MODEL="gpt-4.1"       # optional
+export CODEX_TIMEOUT_MS="45000"    # optional
+bun run dev:api
+```
+
+### 2) OpenAI SDK provider (fallback when Codex is unavailable)
 
 ```bash
 export OPENAI_API_KEY="sk-..."
 # optional
 export OPENAI_MODEL="gpt-4o-mini"
 export OPENAI_TEMPERATURE="0.7"
-bun run dev:api
 ```
 
-### 2) Codex CLI provider (auto-select when available)
-
-```bash
-export OPENAI_API_KEY="sk-..."
-# no explicit toggle needed; Codex is auto-selected when `codex` is available
-# optional transport overrides
-export CODEX_CLI_COMMAND="codex"   # default command name
-export CODEX_MODEL="gpt-4.1"      # defaults to gpt-4.1
-export CODEX_TIMEOUT_MS="45000"    # timeout for CLI process
-```
-
-When `codex` is discoverable, Bun routes API-key auth through `codex exec` with:
+When `codex` is discoverable, Bun routes suggestion requests through `codex exec` with the existing Codex login/session:
 
 - `--full-auto`
 - `--output-schema` (strict JSON schema)
@@ -66,6 +66,6 @@ Example file shape:
 
 ## Troubleshooting
 
-- **`Token error: API authentication failed` on Codex path**: check `OPENAI_API_KEY` and CLI auth setup.
+- **`Token error: API authentication failed` on Codex path**: clear stray `OPENAI_API_KEY` values and verify the `codex` CLI session itself works.
 - **`Token error: API authentication failed` on OAuth**: fallback to API-key or keep OAuth/`browser-session` token fresh.
 - **App reports stub with `authError`**: check env + auth file path + provider availability (`CODEX_CLI_COMMAND` / `USE_BROWSER_SESSION_TRANSPORT` / `USE_STUB_PROVIDER`).

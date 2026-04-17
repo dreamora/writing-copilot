@@ -32,20 +32,43 @@ function createSuggestionProvider(): {
     return { provider: new StubSuggestionProvider(), mode: "stub", authPath };
   }
 
-  let auth: ReturnType<typeof loadChatGptAuth>;
+  let auth: ReturnType<typeof loadChatGptAuth> | undefined;
+  let authError: string | undefined;
   try {
     auth = loadChatGptAuth();
   } catch (error) {
     if (error instanceof ChatGptAuthError) {
+      authError = error.message;
+    } else {
+      throw error;
+    }
+  }
+
+  if (isCodexCliAvailable()) {
+    try {
+      return {
+        provider: new CodexSuggestionProvider(auth),
+        mode: "codex",
+        authPath,
+      };
+    } catch (error) {
+      console.warn("[Server] Codex transport setup failed:", (error as Error).message);
       return {
         provider: new StubSuggestionProvider(),
         mode: "stub",
         authPath,
-        authError: error.message,
+        authError: "Codex CLI was found but could not be started successfully.",
       };
     }
+  }
 
-    throw error;
+  if (!auth) {
+    return {
+      provider: new StubSuggestionProvider(),
+      mode: "stub",
+      authPath,
+      authError: authError ?? "No auth config found and Codex CLI is unavailable.",
+    };
   }
 
   // OAuth tokens are intended for browser-session transport.
@@ -77,25 +100,6 @@ function createSuggestionProvider(): {
         authPath,
         authError:
           "OAuth browser-session transport is not available with current token/session. Keep token fresh and try again later, then restart with USE_BROWSER_SESSION_TRANSPORT=true.",
-      };
-    }
-  }
-
-  if (auth.openai.type === "api-key" && isCodexCliAvailable()) {
-    try {
-      return {
-        provider: new CodexSuggestionProvider(auth),
-        mode: "codex",
-        authPath,
-      };
-    } catch (error) {
-      console.warn("[Server] Codex transport setup failed:", (error as Error).message);
-      return {
-        provider: new StubSuggestionProvider(),
-        mode: "stub",
-        authPath,
-        authError:
-          "Codex CLI provider was selected but is not available. Install / configure codex CLI and OPENAI_API_KEY to use live suggestions, or keep OPENAI_API_KEY unset to fall back to stub mode.",
       };
     }
   }

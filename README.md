@@ -23,15 +23,15 @@ After building the web bundle, the API server also serves `web/dist` for non-API
 
 Bun supports three operational modes:
 
-1. **OpenAI API key path (recommended for reliability)**
+1. **Codex CLI transport (preferred when available)**
+   - if `codex` is installed and you are logged in, Bun uses Codex first
+   - no `OPENAI_API_KEY` is required for this path
+   - optional transport knobs: `CODEX_CLI_COMMAND`, `CODEX_MODEL`, `CODEX_TIMEOUT_MS`, `CODEX_SKIP_GIT_REPO_CHECK=...`
+
+2. **OpenAI API key path (fallback when Codex is unavailable)**
    - set `OPENAI_API_KEY=sk-...`
    - optional: `OPENAI_MODEL`, `OPENAI_TEMPERATURE`
-   - default provider is OpenAI SDK; if `codex` is available, Bun auto-switches to Codex transport
-
-2. **Codex CLI transport (auto-select if available)**
-   - set `OPENAI_API_KEY=sk-...`
-   - Bun automatically switches to Codex when `codex` is discoverable on PATH (or `CODEX_CLI_COMMAND` is set)
-   - optional transport knobs: `CODEX_CLI_COMMAND`, `CODEX_MODEL`, `CODEX_TIMEOUT_MS`, `CODEX_SKIP_GIT_REPO_CHECK=...`
+   - this uses the OpenAI SDK provider
 
 3. **OAuth browser-session path**
    - provide `openai.type: "oauth"` in auth config

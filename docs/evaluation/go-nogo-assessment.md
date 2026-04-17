@@ -9,7 +9,7 @@
 
 ## Context
 
-Phases 0–4 are fully implemented. Phase 5 is the trial readiness + evaluation protocol phase. Real trials (with Marc writing actual posts) have not yet been run — that requires production use with OPENAI_API_KEY configured.
+Phases 0–4 are fully implemented. Phase 5 is the trial readiness + evaluation protocol phase. Real trials (with Marc writing actual posts) have not yet been run — that requires a live provider path, preferably a logged-in `codex` CLI session or alternatively `OPENAI_API_KEY`.
 
 This document assesses the **technical readiness** of the system and makes a provisional **CONTINUE** recommendation to proceed to real trials, with specific gates to enforce the kill criteria.
 
@@ -88,7 +88,7 @@ The full loop works:
 4. All evaluation infrastructure is in place (trial protocols, scorecard, decision memo template)
 
 **Next immediate actions:**
-1. Set `OPENAI_API_KEY` in `.env`
+1. Ensure live provider auth exists (`codex` logged in, or `OPENAI_API_KEY` set as fallback)
 2. Run `bun run db:migrate && bun run dev:api & bun run dev:web`
 3. Execute 3 short-form trials per `docs/evaluation/short-form-trial.md`
 4. Fill `docs/evaluation/comparison-scorecard-template.md` after each trial

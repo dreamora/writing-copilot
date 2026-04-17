@@ -94,6 +94,6 @@ If browser-session transport is unavailable for OAuth mode, the system falls bac
 **Provider Selection Hierarchy:**
 1. `USE_STUB_PROVIDER=true` → `StubSuggestionProvider`
 2. OAuth mode + `USE_BROWSER_SESSION_TRANSPORT=true` → `ChatGptBrowserSessionProvider`
-3. `OPENAI_API_KEY` (or `OPENAI_API_KEY` + `.secrets/chatgpt-auth.json`) + discoverable `codex` CLI → `CodexSuggestionProvider` (via `codex exec`)
+3. discoverable logged-in `codex` CLI → `CodexSuggestionProvider` (via `codex exec`, no API key required)
 4. API-key auth when Codex is unavailable → `OpenAiSuggestionProvider`
 5. otherwise → `StubSuggestionProvider` with explicit auth mode error
