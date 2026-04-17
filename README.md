@@ -26,7 +26,7 @@ Bun supports three operational modes:
 1. **OpenAI API key path (recommended for reliability)**
    - set `OPENAI_API_KEY=sk-...`
    - optional: `OPENAI_MODEL`, `OPENAI_TEMPERATURE`
-   - by default this uses the OpenAI SDK provider
+   - default provider is OpenAI SDK; if `codex` is available, Bun auto-switches to Codex transport
 
 2. **Codex CLI transport (auto-select if available)**
    - set `OPENAI_API_KEY=sk-...`
