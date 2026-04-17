@@ -57,7 +57,7 @@ function createSuggestionProvider(): {
     };
   }
 
-  if (process.env.USE_BROWSER_SESSION_TRANSPORT === "true") {
+  if (process.env.USE_BROWSER_SESSION_TRANSPORT === "true" && auth.openai.type === "oauth") {
     try {
       return {
         provider: createChatGptBrowserSessionProvider(auth),

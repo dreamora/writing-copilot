@@ -15,17 +15,26 @@ const OpenAiOauthSchema = z.object({
   accountId: z.string().min(1, "openai.accountId is required"),
 });
 
+const OpenAiApiKeySchema = z.object({
+  type: z.literal("api-key"),
+  apiKey: z.string().min(1, "openai.apiKey is required"),
+});
+
 const ChatGptAuthSchema = z.object({
-  openai: OpenAiOauthSchema.transform((auth) => ({
-    ...auth,
-    expires: auth.expires < OAUTH_EXPIRES_MS_THRESHOLD ? auth.expires * 1000 : auth.expires,
-  })),
+  openai: z.union([
+    OpenAiOauthSchema.transform((auth) => ({
+      ...auth,
+      expires: auth.expires < OAUTH_EXPIRES_MS_THRESHOLD ? auth.expires * 1000 : auth.expires,
+    })),
+    OpenAiApiKeySchema,
+  ]),
   model: z.string().min(1).optional(),
   baseURL: z.string().url().optional(),
   temperature: z.number().min(0).max(2).optional(),
 });
 
 export type OpenAiOauthAuth = z.infer<typeof OpenAiOauthSchema>;
+export type OpenAiApiKeyAuth = z.infer<typeof OpenAiApiKeySchema>;
 export type ChatGptAuthConfig = z.infer<typeof ChatGptAuthSchema>;
 export type ChatGptAuth = ChatGptAuthConfig;
 
@@ -54,18 +63,58 @@ export function resolveChatGptAuthPath(
 }
 
 export function getOpenAiAccessToken(auth: ChatGptAuthConfig): string {
+  if (auth.openai.type === "api-key") {
+    return auth.openai.apiKey;
+  }
   return auth.openai.access;
 }
 
-
 export function isChatGptAccessExpired(auth: ChatGptAuthConfig, now = Date.now()): boolean {
+  if (auth.openai.type === "api-key") {
+    return false;
+  }
   return auth.openai.expires <= now;
+}
+
+function loadFromEnv(env: NodeJS.ProcessEnv): ChatGptAuthConfig | null {
+  const apiKey = env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    return null;
+  }
+
+  const parsed: ChatGptAuthConfig = {
+    openai: {
+      type: "api-key",
+      apiKey,
+    },
+    model: env.OPENAI_MODEL || undefined,
+    baseURL: env.OPENAI_BASE_URL || undefined,
+    temperature: env.OPENAI_TEMPERATURE
+      ? Number(env.OPENAI_TEMPERATURE)
+      : undefined,
+  };
+
+  const result = ChatGptAuthSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new ChatGptAuthError(
+      "invalid-schema",
+      `Environment OpenAI API credentials are invalid: ${result.error.message}.`,
+      process.cwd()
+    );
+  }
+
+  return result.data;
 }
 
 export function loadChatGptAuth(
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd()
 ): ChatGptAuthConfig {
+  const envAuth = loadFromEnv(env);
+  if (envAuth) {
+    return envAuth;
+  }
+
   const authPath = resolveChatGptAuthPath(env, cwd);
 
   if (!existsSync(authPath)) {
@@ -105,7 +154,7 @@ export function loadChatGptAuth(
       .join(", ");
     throw new ChatGptAuthError(
       "invalid-schema",
-      `ChatGPT auth file at ${authPath} must contain an OAuth login object under openai (${issues}). Update the file to match .secrets/chatgpt-auth.json.example.`,
+      `ChatGPT auth file at ${authPath} must contain either OAuth under openai or api-key style config (${issues}). Update the file to match .secrets/chatgpt-auth.json.example.`,
       authPath
     );
   }

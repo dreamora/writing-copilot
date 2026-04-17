@@ -28,7 +28,9 @@ First iteration uses a local auth JSON file:
 - env override: `CHATGPT_AUTH_PATH=/absolute/or/relative/path.json`
 - stub mode: `USE_STUB_PROVIDER=true`
 - set `USE_BROWSER_SESSION_TRANSPORT=true` for OAuth token transport (this is required for `openai.type: "oauth"` files).
+- for stable live suggestions, prefer `OPENAI_API_KEY=sk-...` and omit OAuth tokens.
 - If you still see `Token error` after this, the token/session is likely rejected by the chatgpt challenge path for backend-only flow and suggestions will remain stubbed.
+- If you want a non-OAuth path, set `OPENAI_API_KEY` and restart; this does not use the Codex CLI.
 
 Minimal example:
 

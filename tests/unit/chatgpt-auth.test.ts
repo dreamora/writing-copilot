@@ -124,4 +124,18 @@ describe("chatgpt-auth", () => {
     const auth = loadChatGptAuth({}, cwd);
     expect(auth.openai.expires).toBeGreaterThan(1_700_000_000_000);
   });
+  it("uses OPENAI_API_KEY env var when auth file is missing", () => {
+    const cwd = createTempDir();
+    const original = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "sk-test-key-123";
+
+    try {
+      const auth = loadChatGptAuth({}, cwd);
+      expect(auth.openai.type).toBe("api-key");
+      expect(auth.openai.apiKey).toBe("sk-test-key-123");
+    } finally {
+      if (original === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = original;
+    }
+  });
 });
