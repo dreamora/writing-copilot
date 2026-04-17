@@ -39,7 +39,7 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
 
   constructor(auth: ChatGptAuthConfig) {
     this.auth = auth;
-    this.model = auth.model ?? "gpt-4o-mini";
+    this.model = auth.model ?? "gpt-5.4-mini";
     this.temperature = auth.temperature ?? 0.7;
     this.deviceId = randomUUID();
   }
@@ -61,7 +61,8 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
 
       const response = await this.sendBrowserConversationRequest(
         prompt,
-        requirements
+        requirements,
+        req.model?.trim() || this.model
       );
 
       return parseModelResponse(response);
@@ -77,7 +78,8 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
     requirements: {
       proofOfWorkToken?: string;
       sentinelToken: string;
-    }
+    },
+    model: string
   ): Promise<string> {
     const accessToken = getOpenAiAccessToken(this.auth);
     const accountId = this.auth.openai?.accountId ?? "";
@@ -92,7 +94,7 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
     });
 
     const payload = createBrowserConversationPayload({
-      model: this.model,
+      model,
       prompt,
     });
 

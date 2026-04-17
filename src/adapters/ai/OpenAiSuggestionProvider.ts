@@ -26,7 +26,7 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
       apiKey: getOpenAiAccessToken(auth),
       baseURL: auth.baseURL,
     });
-    this.model = auth.model ?? "gpt-4o-mini";
+    this.model = auth.model ?? "gpt-5.4-mini";
     this.temperature = auth.temperature ?? 0.7;
     this.stubProvider = new StubSuggestionProvider();
   }
@@ -42,7 +42,7 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await this.callWithTimeout(prompt);
+        const response = await this.callWithTimeout(prompt, req.model?.trim() || this.model);
         return parseModelResponse(response);
       } catch (error) {
         lastError = error as Error;
@@ -67,13 +67,13 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
     throw lastError || new Error("Unknown error in suggest");
   }
 
-  private async callWithTimeout(prompt: string): Promise<string> {
+  private async callWithTimeout(prompt: string, model: string): Promise<string> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
       const response = await this.client.chat.completions.create({
-        model: this.model,
+        model,
         messages: [{ role: "user", content: prompt }],
         temperature: this.temperature,
         max_tokens: 500,

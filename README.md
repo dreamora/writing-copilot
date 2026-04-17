@@ -27,6 +27,7 @@ Bun supports three operational modes:
    - if `codex` is installed and you are logged in, Bun uses Codex first
    - no `OPENAI_API_KEY` is required for this path
    - optional transport knobs: `CODEX_CLI_COMMAND`, `CODEX_MODEL`, `CODEX_TIMEOUT_MS`, `CODEX_SKIP_GIT_REPO_CHECK=...`
+   - editor model dropdown defaults to `gpt-5.4-mini`
 
 2. **OpenAI API key path (fallback when Codex is unavailable)**
    - set `OPENAI_API_KEY=sk-...`

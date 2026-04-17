@@ -21,6 +21,16 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_DOC = import.meta.env.VITE_DEFAULT_DOC ?? "sample.md";
 const DOCUMENT_ID = "doc-main";
 
+const MODEL_STORAGE_KEY = "writing-copilot.model";
+const DEFAULT_MODEL = "gpt-5.4-mini";
+const MODEL_OPTIONS = [
+  "gpt-5.4-mini",
+  "gpt-5.4",
+  "gpt-5.3-codex",
+  "gpt-4.1",
+  "gpt-4o-mini",
+] as const;
+
 type Tab = "editor" | "insights";
 
 type ApiHealth = {
@@ -46,6 +56,10 @@ export default function App() {
   const [loadingSuggestionBlock, setLoadingSuggestionBlock] = useState<string | undefined>();
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [sessionId] = useState(() => createSessionId());
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    if (typeof window === "undefined") return DEFAULT_MODEL;
+    return window.localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_MODEL;
+  });
 
   const { blocks, loading, saving, error, dirtyIds, updateBlock, saveAll, loadDoc } = useBlockEditor();
 
@@ -63,6 +77,12 @@ export default function App() {
       .catch(() => setApiStatus("error"));
   }, []);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
+    }
+  }, [selectedModel]);
+
   const refreshSuggestions = useCallback(async () => {
     try { setSuggestions(await fetchSuggestions(DOCUMENT_ID)); } catch {}
   }, []);
@@ -79,14 +99,14 @@ export default function App() {
     setSuggestionError(null);
     try {
       const context = buildContextEnvelope(blocks, blockId);
-      const newSug = await createSuggestion({ documentId: DOCUMENT_ID, blockId, selection, actionType, customInstruction, context, sessionId });
+      const newSug = await createSuggestion({ documentId: DOCUMENT_ID, blockId, selection, actionType, customInstruction, context, sessionId, model: selectedModel });
       setSuggestions((prev) => [newSug, ...prev]);
     } catch (e) {
       setSuggestionError((e as Error).message);
     } finally {
       setLoadingSuggestionBlock(undefined);
     }
-  }, [blocks, sessionId]);
+  }, [blocks, selectedModel, sessionId]);
 
   const handleAccept = useCallback(async (id: string) => {
     const updated = await acceptSuggestion(id, sessionId);
@@ -189,11 +209,20 @@ export default function App() {
       {/* Editor tab */}
       {activeTab === "editor" && (
         <>
-          <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
             <input type="text" value={docPath} onChange={(e) => setDocPath(e.target.value)}
               placeholder="Document path"
-              style={{ flex: 1, padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "14px" }}
+              style={{ flex: 1, minWidth: "280px", padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "14px" }}
             />
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280" }}>
+              Model
+              <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
+                style={{ padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "13px", background: "#fff", color: "#111827" }}>
+                {MODEL_OPTIONS.map((model) => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+            </label>
             <button type="button" onClick={handleLoad} disabled={loading}
               style={{ padding: "8px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
               {loading ? "Loading…" : "Load"}
@@ -216,6 +245,7 @@ export default function App() {
                 <>
                   <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>
                     {blocks.length} blocks{dirtyIds.size > 0 && ` · ${dirtyIds.size} unsaved`}
+                    {" · model: "}<span style={{ color: "#6b7280" }}>{selectedModel}</span>
                     {" · "}<span style={{ color: "#6b7280" }}>Select text → AI suggestion</span>
                   </div>
                   <BlockEditor blocks={blocks} onBlockChange={updateBlock} dirtyIds={dirtyIds}
@@ -258,6 +288,7 @@ export default function App() {
 
       {/* Insights tab */}
       {activeTab === "insights" && <InsightsPage />}
+
     </div>
   );
 }

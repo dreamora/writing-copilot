@@ -19,7 +19,7 @@ Bun can use two non-stub live transport modes (plus OAuth/browser-session):
 ```bash
 # no API key required if `codex` is already logged in
 export CODEX_CLI_COMMAND="codex"   # optional override
-export CODEX_MODEL="gpt-4.1"       # optional
+export CODEX_MODEL="gpt-5.4-mini"  # optional default
 export CODEX_TIMEOUT_MS="45000"    # optional
 bun run dev:api
 ```
@@ -29,7 +29,7 @@ bun run dev:api
 ```bash
 export OPENAI_API_KEY="sk-..."
 # optional
-export OPENAI_MODEL="gpt-4o-mini"
+export OPENAI_MODEL="gpt-5.4-mini"
 export OPENAI_TEMPERATURE="0.7"
 ```
 

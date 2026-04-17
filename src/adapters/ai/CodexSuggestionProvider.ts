@@ -20,7 +20,7 @@ interface CodexCommandResult {
   signal: NodeJS.Signals | null;
 }
 
-const DEFAULT_CODEX_MODEL = "gpt-4.1";
+const DEFAULT_CODEX_MODEL = "gpt-5.4-mini";
 const DEFAULT_TIMEOUT_MS = 45_000;
 const OUTPUT_FILE_NAME = "codex-last-message.json";
 const SCHEMA_FILE_NAME = "codex-output-schema.json";
@@ -42,9 +42,10 @@ export class CodexSuggestionProvider implements SuggestionProvider {
 
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
     const prompt = this.buildPrompt(req);
+    const model = req.model?.trim() || this.model;
 
     try {
-      const response = await this.callCodex(prompt);
+      const response = await this.callCodex(prompt, model);
       return parseModelResponse(response);
     } catch (error) {
       if (isTokenInvalid(error)) {
@@ -69,7 +70,7 @@ export class CodexSuggestionProvider implements SuggestionProvider {
     ].join("\n");
   }
 
-  private callCodex(prompt: string): Promise<string> {
+  private callCodex(prompt: string, model: string): Promise<string> {
     const workDir = mkdtempSync(join(tmpdir(), "writing-copilot-codex-"));
     const outputPath = resolve(workDir, OUTPUT_FILE_NAME);
     const schemaPath = resolve(workDir, SCHEMA_FILE_NAME);
@@ -95,7 +96,7 @@ export class CodexSuggestionProvider implements SuggestionProvider {
         "--output-last-message",
         outputPath,
         "--model",
-        this.model,
+        model,
       ];
 
       if (process.env.CODEX_SKIP_GIT_REPO_CHECK !== "false") {

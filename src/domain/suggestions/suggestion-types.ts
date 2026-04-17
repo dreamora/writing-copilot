@@ -39,6 +39,7 @@ export interface SuggestionRequest {
   customInstruction?: string;
   context: SuggestionContext;
   style?: SuggestionStyle;
+  model?: string;
 }
 
 export interface SuggestionResponse {
