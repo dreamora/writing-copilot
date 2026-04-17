@@ -21,16 +21,25 @@ After building the web bundle, the API server also serves `web/dist` for non-API
 
 ## ChatGPT auth setup
 
-First iteration uses a local auth JSON file:
+Bun now supports three authentication modes:
 
-- real auth path: `.secrets/chatgpt-auth.json`
-- example contract: `.secrets/chatgpt-auth.json.example`
-- env override: `CHATGPT_AUTH_PATH=/absolute/or/relative/path.json`
-- stub mode: `USE_STUB_PROVIDER=true`
-- set `USE_BROWSER_SESSION_TRANSPORT=true` for OAuth token transport (this is required for `openai.type: "oauth"` files).
-- for stable live suggestions, prefer `OPENAI_API_KEY=sk-...` and omit OAuth tokens.
-- If you still see `Token error` after this, the token/session is likely rejected by the chatgpt challenge path for backend-only flow and suggestions will remain stubbed.
-- If you want a non-OAuth path, set `OPENAI_API_KEY` and restart; this does not use the Codex CLI.
+1. **OpenAI API key path (recommended for reliability)**
+   - set `OPENAI_API_KEY=sk-...`
+   - optional: `OPENAI_MODEL`, `OPENAI_TEMPERATURE`
+   - by default this uses the OpenAI SDK provider
+   - to force Codex CLI transport, set `USE_CODEX_PROVIDER=true`
+
+2. **Codex CLI transport mode**
+   - requires `OPENAI_API_KEY` and `USE_CODEX_PROVIDER=true`
+   - optional transport knobs: `CODEX_CLI_COMMAND`, `CODEX_MODEL`, `CODEX_TIMEOUT_MS`, `CODEX_SKIP_GIT_REPO_CHECK=...`
+
+3. **OAuth browser-session path**
+   - provide `openai.type: "oauth"` in auth config
+   - start backend with `USE_BROWSER_SESSION_TRANSPORT=true`
+   - subject to chatgpt.com challenge behavior (403/401 remain possible)
+
+Common fallback mode
+- set `USE_STUB_PROVIDER=true` to force stub mode for deterministic offline behavior.
 
 Minimal example:
 

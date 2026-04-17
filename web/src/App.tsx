@@ -25,7 +25,7 @@ type Tab = "editor" | "insights";
 
 type ApiHealth = {
   status: string;
-  providerMode?: "stub" | "chatgpt" | "browser-session";
+  providerMode?: "stub" | "chatgpt" | "browser-session" | "codex";
   stubProvider?: boolean;
   authError?: string | null;
   authPath?: string;
@@ -117,6 +117,7 @@ export default function App() {
   const providerBadgeLabel =
     apiHealth?.providerMode === "chatgpt" ? "AI live" :
     apiHealth?.providerMode === "browser-session" ? "AI browser" :
+    apiHealth?.providerMode === "codex" ? "AI codex" :
     apiHealth?.providerMode === "stub" ? "AI stub" :
     "AI unknown";
 
@@ -154,10 +155,10 @@ export default function App() {
                 fontSize: "11px",
                 padding: "2px 8px",
                 borderRadius: "10px",
-                background: apiHealth?.providerMode === "chatgpt" || apiHealth?.providerMode === "browser-session"
+                background: apiHealth?.providerMode === "chatgpt" || apiHealth?.providerMode === "browser-session" || apiHealth?.providerMode === "codex"
                   ? "#dbeafe"
                   : "#fef3c7",
-                color: apiHealth?.providerMode === "chatgpt" || apiHealth?.providerMode === "browser-session"
+                color: apiHealth?.providerMode === "chatgpt" || apiHealth?.providerMode === "browser-session" || apiHealth?.providerMode === "codex"
                   ? "#1d4ed8"
                   : "#92400e",
               }}

@@ -60,9 +60,9 @@ A future live transport likely needs one of these:
 
 ---
 
-## Implementation Status (2026-04-15)
+## Implementation Status (2026-04-17)
 
-### Browser-Session Transport — Now Available
+### Browser-Session Transport — Available
 
 A dedicated `ChatGptBrowserSessionProvider` has been implemented to use OAuth-backed browser session transport:
 
@@ -71,9 +71,9 @@ A dedicated `ChatGptBrowserSessionProvider` has been implemented to use OAuth-ba
 - `src/adapters/ai/sentinel-requirements.ts` — Challenge requirement parsing
 - `tests/unit/chatgpt-browser-session.test.ts` — Unit tests
 
-**Activation:**
+**Activation (OAuth browser transport):**
 ```bash
-USE_BROWSER_SESSION_TRANSPORT=true npm run dev
+USE_BROWSER_SESSION_TRANSPORT=true bun run dev:api
 ```
 
 **Lifecycle:**
@@ -92,6 +92,8 @@ USE_BROWSER_SESSION_TRANSPORT=true npm run dev
 If browser-session transport is unavailable for OAuth mode, the system falls back to stub mode with an explicit auth error in `/api/health`.
 
 **Provider Selection Hierarchy:**
-1. `USE_STUB_PROVIDER=true` → StubSuggestionProvider
-2. `USE_BROWSER_SESSION_TRANSPORT=true` → ChatGptBrowserSessionProvider (with OpenAI fallback)
-3. Default → OpenAiSuggestionProvider
+1. `USE_STUB_PROVIDER=true` → `StubSuggestionProvider`
+2. OAuth mode + `USE_BROWSER_SESSION_TRANSPORT=true` → `ChatGptBrowserSessionProvider`
+3. `OPENAI_API_KEY` + `USE_CODEX_PROVIDER=true` → `CodexSuggestionProvider` (via `codex exec`)
+4. default API-key auth → `OpenAiSuggestionProvider`
+5. otherwise → `StubSuggestionProvider` with explicit auth mode error

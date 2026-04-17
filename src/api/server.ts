@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { readDoc, saveDoc } from "../lib/fs-adapter";
 import { SuggestionService } from "../domain/suggestions/suggestion-service";
 import { OpenAiSuggestionProvider, StubSuggestionProvider } from "../adapters/ai/OpenAiSuggestionProvider";
+import { CodexSuggestionProvider } from "../adapters/ai/CodexSuggestionProvider";
 import { createChatGptBrowserSessionProvider } from "../adapters/ai/ChatGptBrowserSessionProvider";
 import { createSuggestionRoutes } from "../routes/suggestions";
 import { createTelemetryRoutes } from "../routes/telemetry";
@@ -20,7 +21,7 @@ const DB_PATH = process.env.DB_PATH || "./data/copilot.db";
 
 function createSuggestionProvider(): {
   provider: SuggestionProvider;
-  mode: "stub" | "chatgpt" | "browser-session";
+  mode: "stub" | "chatgpt" | "browser-session" | "codex";
   authPath: string;
   authError?: string;
 } {
@@ -47,17 +48,17 @@ function createSuggestionProvider(): {
   }
 
   // OAuth tokens are intended for browser-session transport.
-  if (auth.openai.type === "oauth" && process.env.USE_BROWSER_SESSION_TRANSPORT !== "true") {
-    return {
-      provider: new StubSuggestionProvider(),
-      mode: "stub",
-      authPath,
-      authError:
-        "OAuth token detected, but USE_BROWSER_SESSION_TRANSPORT is not enabled. Set USE_BROWSER_SESSION_TRANSPORT=true to use OAuth auth.",
-    };
-  }
+  if (auth.openai.type === "oauth") {
+    if (process.env.USE_BROWSER_SESSION_TRANSPORT !== "true") {
+      return {
+        provider: new StubSuggestionProvider(),
+        mode: "stub",
+        authPath,
+        authError:
+          "OAuth token detected, but USE_BROWSER_SESSION_TRANSPORT is not enabled. Set USE_BROWSER_SESSION_TRANSPORT=true to use OAuth auth.",
+      };
+    }
 
-  if (process.env.USE_BROWSER_SESSION_TRANSPORT === "true" && auth.openai.type === "oauth") {
     try {
       return {
         provider: createChatGptBrowserSessionProvider(auth),
@@ -69,15 +70,32 @@ function createSuggestionProvider(): {
         "[Server] Browser-session transport setup failed:",
         (error as Error).message
       );
-      if (auth.openai.type === "oauth") {
-        return {
-          provider: new StubSuggestionProvider(),
-          mode: "stub",
-          authPath,
-          authError:
-            "OAuth browser-session transport is not available with current token/session. Keep token fresh and try again later, then restart with USE_BROWSER_SESSION_TRANSPORT=true.",
-        };
-      }
+      return {
+        provider: new StubSuggestionProvider(),
+        mode: "stub",
+        authPath,
+        authError:
+          "OAuth browser-session transport is not available with current token/session. Keep token fresh and try again later, then restart with USE_BROWSER_SESSION_TRANSPORT=true.",
+      };
+    }
+  }
+
+  if (process.env.USE_CODEX_PROVIDER === "true") {
+    try {
+      return {
+        provider: new CodexSuggestionProvider(auth),
+        mode: "codex",
+        authPath,
+      };
+    } catch (error) {
+      console.warn("[Server] Codex transport setup failed:", (error as Error).message);
+      return {
+        provider: new StubSuggestionProvider(),
+        mode: "stub",
+        authPath,
+        authError:
+          "Codex CLI provider is enabled but not available. Install / configure codex CLI and OPENAI_API_KEY, or disable USE_CODEX_PROVIDER.",
+      };
     }
   }
 

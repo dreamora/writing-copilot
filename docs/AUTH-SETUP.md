@@ -1,51 +1,71 @@
 # ChatGPT Auth Setup — Writing Copilot
 
-## How auth is loaded (in order)
+## Auth loading priority (highest first)
 
-1. `OPENAI_API_KEY` environment variable (preferred for reliability in this environment)
-2. `.secrets/chatgpt-auth.json` (if present)
-3. `CHATGPT_AUTH_PATH` environment override path (optional)
+1. `OPENAI_API_KEY` environment variable (API-key mode)
+2. `.secrets/chatgpt-auth.json` (file-based)
+3. `CHATGPT_AUTH_PATH` (path override)
 
-`openai.type: "oauth"` entries require `USE_BROWSER_SESSION_TRANSPORT=true` and are subject to `chatgpt.com` anti-abuse behavior.
+If `OPENAI_API_KEY` is set, it takes precedence and is treated as `openai.type: "api-key"`.
 
-## Recommended local setup
+## Provider modes
 
-For stable suggestions, use an OpenAI API key:
+Bun can use three provider modes:
+
+### 1) OpenAI SDK provider (default)
 
 ```bash
 export OPENAI_API_KEY="sk-..."
-OPENAI_MODEL="gpt-4o-mini" # optional
+# optional
+export OPENAI_MODEL="gpt-4o-mini"
+export OPENAI_TEMPERATURE="0.7"
 bun run dev:api
 ```
 
-Using `OPENAI_API_KEY` skips OAuth parsing and uses the OpenAI SDK provider.
+### 2) Codex CLI provider (explicit)
 
-## OAuth setup
+```bash
+export OPENAI_API_KEY="sk-..."
+export USE_CODEX_PROVIDER=true
+# optional transport overrides
+export CODEX_CLI_COMMAND="codex"   # default command name
+export CODEX_MODEL="gpt-4.1"      # defaults to gpt-4.1
+export CODEX_TIMEOUT_MS="45000"    # timeout for CLI process
+```
 
-To keep OAuth mode, set your token file as:
+`USE_CODEX_PROVIDER` makes Bun run suggestion requests through `codex exec` with:
+
+- `--full-auto`
+- `--output-schema` (strict JSON schema)
+- `--output-last-message` (structured extraction)
+- `--skip-git-repo-check`
+
+For non-UI troubleshooting, check `/api/health` for `providerMode: "codex"` or `authError`.
+
+### 3) OAuth/browser-session provider
+
+```bash
+export USE_BROWSER_SESSION_TRANSPORT=true
+```
+
+This mode requires an OAuth auth file and is still sensitive to anti-abuse blocks (`403 unusual activity`).
+
+Example file shape:
 
 ```json
 {
   "openai": {
     "type": "oauth",
-    "refresh": "...",
-    "access": "...",
+    "refresh": "<token>",
+    "access": "<token>",
     "expires": 1776691031314,
     "accountId": "user-id"
   }
 }
 ```
 
-Then start with:
-
-```bash
-USE_BROWSER_SESSION_TRANSPORT=true bun run dev:api
-```
-
-If `/api/health` reports `providerMode: "stub"`, open that auth error message for a concrete blocker.
-
 ## Troubleshooting
 
-- **`Token error: API authentication failed...` with 403/401**: usually OAuth token/challenge mismatch; switch to `OPENAI_API_KEY`.
-- **If auth is missing/invalid**: app stays in stub mode and `/api/health` shows `authError`.
-
+- **`Token error: API authentication failed` on Codex path**: check `OPENAI_API_KEY` and CLI auth setup.
+- **`Token error: API authentication failed` on OAuth**: fallback to API-key or keep OAuth/`browser-session` token fresh.
+- **App reports stub with `authError`**: check env + auth file path + chosen mode (`USE_CODEX_PROVIDER` / `USE_BROWSER_SESSION_TRANSPORT` / `USE_STUB_PROVIDER`).
