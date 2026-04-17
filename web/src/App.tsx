@@ -13,13 +13,24 @@ import {
   editApplySuggestion,
   deferSuggestion,
 } from "./features/suggestions/SuggestionActions";
-import type { Suggestion, SuggestionActionType } from "../../src/domain/suggestions/suggestion-types";
+import type { Suggestion, SuggestionActionType, EditorRole } from "../../src/domain/suggestions/suggestion-types";
 import type { SelectionSpan } from "./features/editor/SelectionState";
 import { buildContextEnvelope } from "../../src/domain/suggestions/context-envelope";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_DOC = import.meta.env.VITE_DEFAULT_DOC ?? "sample.md";
 const DOCUMENT_ID = "doc-main";
+
+const ROLE_STORAGE_KEY = "writing-copilot.role";
+const DEFAULT_EDITOR_ROLE: EditorRole = "professional-lector";
+const ROLE_OPTIONS: Array<{ value: EditorRole; label: string }> = [
+  { value: "professional-lector", label: "Professional lector" },
+  { value: "rigorous-reviewer", label: "Rigorous reviewer" },
+  { value: "precise-editor", label: "Precise editor" },
+  { value: "sharp-stylist", label: "Sharp stylist" },
+  { value: "joyful-but-adult", label: "Joyful but adult" },
+  { value: "marc-voice", label: "Marc voice" },
+];
 
 const MODEL_STORAGE_KEY = "writing-copilot.model";
 const DEFAULT_MODEL = "gpt-5.4-mini";
@@ -56,6 +67,10 @@ export default function App() {
   const [loadingSuggestionBlock, setLoadingSuggestionBlock] = useState<string | undefined>();
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [sessionId] = useState(() => createSessionId());
+  const [selectedRole, setSelectedRole] = useState<EditorRole>(() => {
+    if (typeof window === "undefined") return DEFAULT_EDITOR_ROLE;
+    return (window.localStorage.getItem(ROLE_STORAGE_KEY) as EditorRole | null) || DEFAULT_EDITOR_ROLE;
+  });
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     if (typeof window === "undefined") return DEFAULT_MODEL;
     return window.localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_MODEL;
@@ -79,6 +94,12 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      window.localStorage.setItem(ROLE_STORAGE_KEY, selectedRole);
+    }
+  }, [selectedRole]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
       window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
     }
   }, [selectedModel]);
@@ -99,14 +120,14 @@ export default function App() {
     setSuggestionError(null);
     try {
       const context = buildContextEnvelope(blocks, blockId);
-      const newSug = await createSuggestion({ documentId: DOCUMENT_ID, blockId, selection, actionType, customInstruction, context, sessionId, model: selectedModel });
+      const newSug = await createSuggestion({ documentId: DOCUMENT_ID, blockId, selection, actionType, customInstruction, context, sessionId, model: selectedModel, editorRole: selectedRole });
       setSuggestions((prev) => [newSug, ...prev]);
     } catch (e) {
       setSuggestionError((e as Error).message);
     } finally {
       setLoadingSuggestionBlock(undefined);
     }
-  }, [blocks, selectedModel, sessionId]);
+  }, [blocks, selectedModel, selectedRole, sessionId]);
 
   const handleAccept = useCallback(async (id: string) => {
     const updated = await acceptSuggestion(id, sessionId);
@@ -215,6 +236,15 @@ export default function App() {
               style={{ flex: 1, minWidth: "280px", padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "14px" }}
             />
             <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280" }}>
+              Role
+              <select value={selectedRole} onChange={(e) => setSelectedRole(e.target.value as EditorRole)}
+                style={{ padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "13px", background: "#fff", color: "#111827" }}>
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role.value} value={role.value}>{role.label}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280" }}>
               Model
               <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
                 style={{ padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "13px", background: "#fff", color: "#111827" }}>
@@ -245,6 +275,7 @@ export default function App() {
                 <>
                   <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>
                     {blocks.length} blocks{dirtyIds.size > 0 && ` · ${dirtyIds.size} unsaved`}
+                    {" · role: "}<span style={{ color: "#6b7280" }}>{ROLE_OPTIONS.find((role) => role.value === selectedRole)?.label ?? selectedRole}</span>
                     {" · model: "}<span style={{ color: "#6b7280" }}>{selectedModel}</span>
                     {" · "}<span style={{ color: "#6b7280" }}>Select text → AI suggestion</span>
                   </div>

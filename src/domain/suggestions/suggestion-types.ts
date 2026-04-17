@@ -7,6 +7,14 @@ export type SuggestionActionType =
   | "clarify"
   | "custom";
 
+export type EditorRole =
+  | "professional-lector"
+  | "rigorous-reviewer"
+  | "precise-editor"
+  | "sharp-stylist"
+  | "joyful-but-adult"
+  | "marc-voice";
+
 export type SuggestionStatus =
   | "open"
   | "accepted"
@@ -40,6 +48,7 @@ export interface SuggestionRequest {
   context: SuggestionContext;
   style?: SuggestionStyle;
   model?: string;
+  editorRole?: EditorRole;
 }
 
 export interface SuggestionResponse {

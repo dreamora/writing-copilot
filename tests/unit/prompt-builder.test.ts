@@ -38,4 +38,24 @@ describe("Prompt builder", () => {
     expect(prompt).toContain("issueSummary");
     expect(prompt).toContain("proposedText");
   });
+
+  it("defaults to professional lector guidance", () => {
+    const prompt = buildPrompt(BASE_REQ);
+    expect(prompt).toContain("Professional lector");
+    expect(prompt).toContain("Preserve meaning before improving style.");
+  });
+
+  it("injects anti-whimsy guidance for joyful but adult mode", () => {
+    const prompt = buildPrompt({ ...BASE_REQ, editorRole: "joyful-but-adult" });
+    expect(prompt).toContain("Joyful but adult");
+    expect(prompt).toContain("sparkling little unicorn");
+    expect(prompt).toContain("not through cuteness");
+  });
+
+  it("injects Marc voice profile when requested", () => {
+    const prompt = buildPrompt({ ...BASE_REQ, editorRole: "marc-voice" });
+    expect(prompt).toContain("Marc voice");
+    expect(prompt).toContain("Grounded, sharp, practical, adult, and agency-oriented");
+    expect(prompt).toContain("The more you automate, the less you actually understand.");
+  });
 });

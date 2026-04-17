@@ -58,6 +58,19 @@ Minimal example:
 
 If auth is missing, malformed, or the access token is expired, `/api/health` reports the resolved auth path and an actionable auth error while the app stays in stub mode.
 
+## Editorial roles
+
+The editor now supports a role selector in the toolbar. Choose the review stance you want before requesting a suggestion:
+
+- Professional lector
+- Rigorous reviewer
+- Precise editor
+- Sharp stylist
+- Joyful but adult
+- Marc voice
+
+`Marc voice` is derived from Marc's vault corpus and aims for grounded, sharp, adult edits instead of generic AI polish.
+
 ## Architecture
 
 - `src/api/` — Bun HTTP server
