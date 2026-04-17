@@ -27,6 +27,8 @@ First iteration uses a local auth JSON file:
 - example contract: `.secrets/chatgpt-auth.json.example`
 - env override: `CHATGPT_AUTH_PATH=/absolute/or/relative/path.json`
 - stub mode: `USE_STUB_PROVIDER=true`
+- set `USE_BROWSER_SESSION_TRANSPORT=true` for OAuth token transport (this is required for `openai.type: "oauth"` files).
+- If you still see `Token error` after this, the token/session is likely rejected by the chatgpt challenge path for backend-only flow and suggestions will remain stubbed.
 
 Minimal example:
 

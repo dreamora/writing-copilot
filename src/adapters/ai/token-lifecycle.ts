@@ -39,14 +39,14 @@ export function sanitizeAuthError(error: unknown): string {
   const err = error as any;
 
   if (err?.status === 401) {
-    return "API authentication failed. Check your OAuth auth file or access token.";
+    return "API authentication failed. OpenAI API transport rejects OAuth access tokens. Use USE_BROWSER_SESSION_TRANSPORT=true for OAuth, or provide a valid OpenAI API key.";
   }
   if (err?.status === 403) {
-    return "API access denied. Check your OAuth access token permissions or quota.";
+    return "API access denied. Check your token permissions, expiry, or quota.";
   }
   const msg = String(err?.message || "").toLowerCase();
   if (msg.includes("api key") || msg.includes("token")) {
-    return "Invalid OAuth access token in auth file.";
+    return "Invalid access token in auth file.";
   }
   if (msg.includes("quota")) {
     return "API quota exceeded. Check your OpenAI account.";

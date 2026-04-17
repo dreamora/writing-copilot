@@ -30,31 +30,9 @@ function createSuggestionProvider(): {
     return { provider: new StubSuggestionProvider(), mode: "stub", authPath };
   }
 
-  // T4: Browser-session transport (experimental)
-  if (process.env.USE_BROWSER_SESSION_TRANSPORT === "true") {
-    try {
-      const auth = loadChatGptAuth();
-      return {
-        provider: createChatGptBrowserSessionProvider(auth),
-        mode: "browser-session",
-        authPath,
-      };
-    } catch (error) {
-      console.warn(
-        "[Server] Browser-session transport failed, falling back to OpenAI SDK:",
-        (error as Error).message
-      );
-      // Fall through to OpenAI provider
-    }
-  }
-
+  let auth: ReturnType<typeof loadChatGptAuth>;
   try {
-    const auth = loadChatGptAuth();
-    return {
-      provider: new OpenAiSuggestionProvider(auth),
-      mode: "chatgpt",
-      authPath,
-    };
+    auth = loadChatGptAuth();
   } catch (error) {
     if (error instanceof ChatGptAuthError) {
       return {
@@ -67,7 +45,49 @@ function createSuggestionProvider(): {
 
     throw error;
   }
+
+  // OAuth tokens are intended for browser-session transport.
+  if (auth.openai.type === "oauth" && process.env.USE_BROWSER_SESSION_TRANSPORT !== "true") {
+    return {
+      provider: new StubSuggestionProvider(),
+      mode: "stub",
+      authPath,
+      authError:
+        "OAuth token detected, but USE_BROWSER_SESSION_TRANSPORT is not enabled. Set USE_BROWSER_SESSION_TRANSPORT=true to use OAuth auth.",
+    };
+  }
+
+  if (process.env.USE_BROWSER_SESSION_TRANSPORT === "true") {
+    try {
+      return {
+        provider: createChatGptBrowserSessionProvider(auth),
+        mode: "browser-session",
+        authPath,
+      };
+    } catch (error) {
+      console.warn(
+        "[Server] Browser-session transport setup failed:",
+        (error as Error).message
+      );
+      if (auth.openai.type === "oauth") {
+        return {
+          provider: new StubSuggestionProvider(),
+          mode: "stub",
+          authPath,
+          authError:
+            "OAuth browser-session transport is not available with current token/session. Keep token fresh and try again later, then restart with USE_BROWSER_SESSION_TRANSPORT=true.",
+        };
+      }
+    }
+  }
+
+  return {
+    provider: new OpenAiSuggestionProvider(auth),
+    mode: "chatgpt",
+    authPath,
+  };
 }
+
 
 const providerBootstrap = createSuggestionProvider();
 const db = new Database(DB_PATH);

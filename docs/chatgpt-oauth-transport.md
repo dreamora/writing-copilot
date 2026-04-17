@@ -89,7 +89,7 @@ USE_BROWSER_SESSION_TRANSPORT=true npm run dev
 - Requires network access to chatgpt.com
 
 **Fallback Behavior:**
-If browser-session transport fails at any step, the system gracefully falls back to the standard OpenAI provider (if configured) or stub mode.
+If browser-session transport is unavailable for OAuth mode, the system falls back to stub mode with an explicit auth error in `/api/health`.
 
 **Provider Selection Hierarchy:**
 1. `USE_STUB_PROVIDER=true` → StubSuggestionProvider

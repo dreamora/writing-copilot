@@ -5,16 +5,21 @@ import { z } from "zod";
 export const DEFAULT_CHATGPT_AUTH_PATH = ".secrets/chatgpt-auth.json";
 export const CHATGPT_AUTH_ENV_VAR = "CHATGPT_AUTH_PATH";
 
+const OAUTH_EXPIRES_MS_THRESHOLD = 1_000_000_000_000;
+
 const OpenAiOauthSchema = z.object({
   type: z.literal("oauth"),
   refresh: z.string().min(1, "openai.refresh is required"),
   access: z.string().min(1, "openai.access is required"),
-  expires: z.number().int().positive("openai.expires must be a unix millisecond timestamp"),
+  expires: z.number().positive("openai.expires must be a unix timestamp"),
   accountId: z.string().min(1, "openai.accountId is required"),
 });
 
 const ChatGptAuthSchema = z.object({
-  openai: OpenAiOauthSchema,
+  openai: OpenAiOauthSchema.transform((auth) => ({
+    ...auth,
+    expires: auth.expires < OAUTH_EXPIRES_MS_THRESHOLD ? auth.expires * 1000 : auth.expires,
+  })),
   model: z.string().min(1).optional(),
   baseURL: z.string().url().optional(),
   temperature: z.number().min(0).max(2).optional(),
@@ -51,6 +56,7 @@ export function resolveChatGptAuthPath(
 export function getOpenAiAccessToken(auth: ChatGptAuthConfig): string {
   return auth.openai.access;
 }
+
 
 export function isChatGptAccessExpired(auth: ChatGptAuthConfig, now = Date.now()): boolean {
   return auth.openai.expires <= now;

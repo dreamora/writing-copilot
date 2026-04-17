@@ -116,4 +116,12 @@ describe("chatgpt-auth", () => {
     expect(isChatGptAccessExpired(auth, 1001)).toBe(true);
     expect(isChatGptAccessExpired(auth, 999)).toBe(false);
   });
+
+  it("normalizes oauth expiry supplied in seconds", () => {
+    const cwd = createTempDir();
+    writeOauthAuth(cwd, { expires: Math.floor(Date.now() / 1000) + 3600 });
+
+    const auth = loadChatGptAuth({}, cwd);
+    expect(auth.openai.expires).toBeGreaterThan(1_700_000_000_000);
+  });
 });
