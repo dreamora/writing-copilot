@@ -254,14 +254,15 @@ const server = Bun.serve({
     if (method === "GET" && pathname === "/api/suggestions") {
       return addCors(suggestionRoutes["GET /api/suggestions"](request));
     }
-    const lifecycleMatch = pathname.match(/^\/api\/suggestions\/([^/]+)\/(accept|reject|edit-apply|defer)$/);
+    const lifecycleMatch = pathname.match(/^\/api\/suggestions\/([^/]+)\/(accept|reject|edit-apply|defer|reopen)$/);
     if (method === "POST" && lifecycleMatch) {
       const [, id, action] = lifecycleMatch;
       let res: Response;
       if (action === "accept") res = await suggestionRoutes["POST /api/suggestions/:id/accept"](request, id!);
       else if (action === "reject") res = await suggestionRoutes["POST /api/suggestions/:id/reject"](request, id!);
       else if (action === "edit-apply") res = await suggestionRoutes["POST /api/suggestions/:id/edit-apply"](request, id!);
-      else res = await suggestionRoutes["POST /api/suggestions/:id/defer"](request, id!);
+      else if (action === "defer") res = await suggestionRoutes["POST /api/suggestions/:id/defer"](request, id!);
+      else res = await suggestionRoutes["POST /api/suggestions/:id/reopen"](request, id!);
       return addCors(res);
     }
 
@@ -308,13 +309,13 @@ const server = Bun.serve({
       return addCors(telemetryRoutes["GET /api/insights/summary"](request));
     }
 
+    if (pathname.startsWith("/api")) {
+      return addCors(json({ error: "Not found" }, 404));
+    }
+
     const staticResponse = await serveStaticFile(pathname);
     if (staticResponse) {
       return staticResponse;
-    }
-
-    if (method === "GET" && pathname.startsWith("/api")) {
-      return addCors(json({ error: "Not found" }, 404));
     }
 
     return (await serveStaticFile('/index.html')) ?? new Response("Not found");

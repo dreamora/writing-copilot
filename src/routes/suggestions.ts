@@ -88,5 +88,13 @@ export function createSuggestionRoutes(service: SuggestionService) {
       if (!updated) return jsonError("Suggestion not found", 404);
       return json(updated);
     },
+
+    "POST /api/suggestions/:id/reopen": async (req: Request, id: string) => {
+      const body = await readOptionalJson(req);
+      const sessionId = typeof body.sessionId === "string" ? body.sessionId : undefined;
+      const updated = service.transition(id, "open", undefined, sessionId);
+      if (!updated) return jsonError("Suggestion not found", 404);
+      return json(updated);
+    },
   } as const;
 }

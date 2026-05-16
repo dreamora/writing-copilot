@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import ContinuousEditor from "./features/editor/ContinuousEditor";
 import { useDocumentEditor } from "./features/editor/documentState";
-import SuggestionThread from "./features/suggestions/SuggestionThread";
 import InsightsPage from "./features/insights/InsightsPage";
 import CompactSummary from "./features/insights/CompactSummary";
+import ReviewThreadList from "./features/suggestions/ReviewThreadList";
 import {
   createSuggestion,
   fetchSuggestions,
@@ -11,11 +11,12 @@ import {
   rejectSuggestion,
   editApplySuggestion,
   deferSuggestion,
+  reopenSuggestion,
 } from "./features/suggestions/SuggestionActions";
 import type { Suggestion, EditorRole, SuggestionWorkflowStage } from "../../src/domain/suggestions/suggestion-types";
 import type { SelectionSpan } from "./features/editor/SelectionState";
 import { buildSelectionContextEnvelope } from "../../src/domain/suggestions/document-context";
-import { applySuggestionToDocument, createInlineAnchorId, getLineNumberForOffset } from "./features/editor/documentEditing";
+import { applySuggestionToDocument, createInlineAnchorId } from "./features/editor/documentEditing";
 import { useAnnotations } from "./features/annotations/annotationState";
 import AnnotationPanel from "./features/annotations/AnnotationPanel";
 import type { AnnotationHighlight } from "./features/editor/markdownPreview";
@@ -213,7 +214,13 @@ export default function App() {
     setSuggestions((prev) => prev.map((entry) => (entry.id === id ? updated : entry)));
   }, [sessionId]);
 
-  const openSuggestions = suggestions.filter((s) => s.status === "open" || s.status === "deferred");
+  const handleReopen = useCallback(async (id: string) => {
+    const updated = await reopenSuggestion(id, sessionId);
+    setSuggestions((prev) => prev.map((entry) => (entry.id === id ? updated : entry)));
+  }, [sessionId]);
+
+  const actionableSuggestionsCount = suggestions.filter((s) => s.status === "open").length;
+  const suggestionSummaryRefreshKey = suggestions.map((s) => `${s.id}:${s.status}:${s.updatedAt}`).join("|");
   const providerBadgeLabel = apiHealth?.providerMode === "chatgpt" ? "AI live"
     : apiHealth?.providerMode === "browser-session" ? "AI browser"
     : apiHealth?.providerMode === "codex" ? "AI codex"
@@ -254,14 +261,14 @@ export default function App() {
 
       <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb", marginBottom: "20px" }}>
         <button type="button" style={tabStyle(activeTab === "editor")} onClick={() => setActiveTab("editor")}>✏️ Review</button>
-        <button type="button" style={tabStyle(activeTab === "insights")} onClick={() => setActiveTab("insights")}>📊 Insights {openSuggestions.length > 0 && `(${openSuggestions.length})`}</button>
+        <button type="button" style={tabStyle(activeTab === "insights")} onClick={() => setActiveTab("insights")}>📊 Insights {actionableSuggestionsCount > 0 && `(${actionableSuggestionsCount})`}</button>
         {content && activeTab === "editor" && (
           <>
             <button type="button" style={{ ...tabStyle(showAnnotations), marginLeft: "auto" }} onClick={() => setShowAnnotations((current) => !current)}>
               {showAnnotations ? "Hide annotations" : `Annotations${annotations.length > 0 ? ` (${annotations.length})` : ""}`}
             </button>
             <button type="button" style={tabStyle(showSidebar)} onClick={() => setShowSidebar((current) => !current)}>
-              {showSidebar ? "Hide review sidebar" : `Show review sidebar${openSuggestions.length > 0 ? ` (${openSuggestions.length})` : ""}`}
+              {showSidebar ? "Hide review sidebar" : `Show review sidebar${actionableSuggestionsCount > 0 ? ` (${actionableSuggestionsCount})` : ""}`}
             </button>
           </>
         )}
@@ -341,24 +348,19 @@ export default function App() {
 
             {content && showSidebar && (
               <div>
-                <CompactSummary documentId={DOCUMENT_ID} sessionId={sessionId} />
+                <CompactSummary documentId={DOCUMENT_ID} sessionId={sessionId} refreshKey={suggestionSummaryRefreshKey} />
                 <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
-                  Review threads {openSuggestions.length > 0 && `(${openSuggestions.length} open)`}
+                  Review threads
                 </div>
-                {suggestions.length === 0 ? (
-                  <div style={{ color: "#9ca3af", fontSize: "13px", padding: "12px", border: "1px dashed #e5e7eb", borderRadius: "6px" }}>
-                    Select any span in the full document to create inline-style review feedback.
-                  </div>
-                ) : (
-                  suggestions.map((suggestion) => (
-                    <div key={suggestion.id} style={{ marginBottom: "12px" }}>
-                      <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "4px" }}>
-                        {suggestion.blockId} · line {getLineNumberForOffset(content, suggestion.charStart)}
-                      </div>
-                      <SuggestionThread suggestion={suggestion} onAccept={handleAccept} onReject={handleReject} onEditApply={handleEditApply} onDefer={handleDefer} />
-                    </div>
-                  ))
-                )}
+                <ReviewThreadList
+                  content={content}
+                  suggestions={suggestions}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
+                  onEditApply={handleEditApply}
+                  onDefer={handleDefer}
+                  onReopen={handleReopen}
+                />
               </div>
             )}
 

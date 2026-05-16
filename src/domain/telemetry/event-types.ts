@@ -6,6 +6,7 @@ export type TelemetryEventType =
   | "suggestion_rejected"
   | "suggestion_edited_then_applied"
   | "suggestion_deferred"
+  | "suggestion_reopened"
   | "suggestion_reverted"
   | "manual_rewrite_recorded"
   | "block_focus_started"
@@ -52,6 +53,7 @@ export const VALID_EVENT_TYPES = new Set<TelemetryEventType>([
   "suggestion_rejected",
   "suggestion_edited_then_applied",
   "suggestion_deferred",
+  "suggestion_reopened",
   "suggestion_reverted",
   "manual_rewrite_recorded",
   "block_focus_started",

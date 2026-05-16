@@ -52,6 +52,7 @@ function rowToSuggestion(row: Record<string, unknown>): Suggestion {
 }
 
 const STATUS_TO_EVENT: Record<string, string> = {
+  open: "suggestion_reopened",
   accepted: "suggestion_accepted",
   rejected: "suggestion_rejected",
   edited_applied: "suggestion_edited_then_applied",
@@ -145,7 +146,11 @@ export class SuggestionService {
     const decisionStatuses: SuggestionStatus[] = ["accepted", "rejected", "edited_applied"];
     const decidedAt = decisionStatuses.includes(status) ? now : null;
 
-    if (editedText !== undefined) {
+    if (status === "open") {
+      this.db.prepare(
+        "UPDATE suggestions SET status = ?, edited_text = NULL, updated_at = ?, decided_at = NULL WHERE id = ?"
+      ).run(status, now, id);
+    } else if (editedText !== undefined) {
       if (decidedAt !== null) {
         this.db.prepare(
           "UPDATE suggestions SET status = ?, edited_text = ?, updated_at = ?, decided_at = ? WHERE id = ?"

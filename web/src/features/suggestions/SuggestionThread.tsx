@@ -9,6 +9,7 @@ interface SuggestionThreadProps {
   onReject: (id: string) => void;
   onEditApply: (id: string, editedText: string) => void;
   onDefer: (id: string) => void;
+  onReopen: (id: string) => void;
 }
 
 const STATUS_BADGES: Record<string, { label: string; color: string; bg: string }> = {
@@ -25,6 +26,7 @@ export default function SuggestionThread({
   onReject,
   onEditApply,
   onDefer,
+  onReopen,
 }: SuggestionThreadProps) {
   const [showEdit, setShowEdit] = useState(false);
   const [editText, setEditText] = useState(suggestion.proposedText);
@@ -81,6 +83,18 @@ export default function SuggestionThread({
       await onDefer(suggestion.id);
     } catch (e) {
       setActionError(`Failed to defer: ${(e as Error).message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleReopenClick = async () => {
+    setLoadingAction("reopen");
+    setActionError(null);
+    try {
+      await onReopen(suggestion.id);
+    } catch (e) {
+      setActionError(`Failed to reopen: ${(e as Error).message}`);
     } finally {
       setLoadingAction(null);
     }
@@ -310,6 +324,29 @@ export default function SuggestionThread({
             aria-label="Defer suggestion"
           >
             {loadingAction === "defer" ? "Deferring…" : "↷ Defer"}
+          </button>
+        </div>
+      )}
+
+      {suggestion.status === "deferred" && (
+        <div style={{ display: "flex", gap: "6px", marginTop: "12px", flexWrap: "wrap" }}>
+          <button
+            onClick={handleReopenClick}
+            disabled={loadingAction !== null}
+            style={{
+              padding: "5px 12px",
+              background: loadingAction === "reopen" ? "#9ca3af" : "#2563eb",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: loadingAction !== null ? "not-allowed" : "pointer",
+              fontSize: "12px",
+              fontWeight: 600,
+              opacity: loadingAction !== null && loadingAction !== "reopen" ? 0.5 : 1,
+            }}
+            aria-label="Reopen suggestion"
+          >
+            {loadingAction === "reopen" ? "Reopening…" : "Reopen"}
           </button>
         </div>
       )}

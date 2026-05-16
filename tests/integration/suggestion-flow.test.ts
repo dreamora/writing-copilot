@@ -108,6 +108,14 @@ describe("Suggestion flow (integration)", () => {
     expect(deferred?.decidedAt).toBeFalsy();
   });
 
+  it("reopen moves a deferred suggestion back to open without decidedAt", async () => {
+    const s = await service.createSuggestion(BASE_REQ);
+    service.transition(s.id, "deferred");
+    const reopened = service.transition(s.id, "open");
+    expect(reopened?.status).toBe("open");
+    expect(reopened?.decidedAt).toBeFalsy();
+  });
+
   it("getSuggestionsForDocument returns all for document", async () => {
     await service.createSuggestion(BASE_REQ);
     await service.createSuggestion({ ...BASE_REQ, blockId: "block-002" });
