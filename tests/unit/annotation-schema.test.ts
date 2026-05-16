@@ -12,6 +12,7 @@ function createTestDb(): Database {
     "001_init.sql",
     "003_suggestions.sql",
     "004_telemetry.sql",
+    "006_tool_for_thought.sql",
     "005_annotations.sql",
   ]) {
     db.exec(readFileSync(join(migDir, f), "utf-8"));

@@ -33,6 +33,8 @@ export default function SuggestionThread({
   
   const badge = STATUS_BADGES[suggestion.status] ?? STATUS_BADGES.open!;
   const isDecided = suggestion.status !== "open" && suggestion.status !== "deferred";
+  const lenses = suggestion.lenses ?? [];
+  const provocations = suggestion.provocations ?? [];
 
   const handleAcceptClick = async () => {
     setLoadingAction("accept");
@@ -125,6 +127,43 @@ export default function SuggestionThread({
           <span style={{ color: "#f59e0b" }}> ⚠ {suggestion.riskNotes}</span>
         )}
       </div>
+
+      {(suggestion.workflowStage || suggestion.activeLens || suggestion.shownEdit) && (
+        <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
+          <div>
+            <strong>Stage:</strong> {suggestion.workflowStage ?? "final-output"}
+            {suggestion.activeLens && <> · <strong>Lens:</strong> {suggestion.activeLens}</>}
+          </div>
+          {suggestion.shownEdit && (
+            <div style={{ marginTop: "4px" }}>
+              <strong>Shown edit:</strong> {suggestion.shownEdit.editType} — {suggestion.shownEdit.whyThisEdit}
+            </div>
+          )}
+        </div>
+      )}
+
+      {lenses.length > 0 && (
+        <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
+          <strong>Lenses</strong>
+          {lenses.slice(0, 3).map((lens, index) => (
+            <div key={`${lens.name}-${index}`} style={{ marginTop: "4px" }}>
+              {lens.name}: {lens.focus}
+              {lens.relevance && <span style={{ color: "#6b7280" }}> ({lens.relevance})</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {provocations.length > 0 && (
+        <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
+          <strong>Provocations</strong>
+          {provocations.slice(0, 4).map((provocation, index) => (
+            <div key={`${provocation.kind}-${index}`} style={{ marginTop: "4px" }}>
+              <span style={{ color: "#6b7280" }}>{provocation.kind} · {provocation.stage}:</span> {provocation.prompt}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Diff preview */}
       <SuggestionDiff

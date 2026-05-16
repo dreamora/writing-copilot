@@ -16,10 +16,40 @@ Respond with ONLY valid JSON in this exact shape (no markdown, no preamble):
   "issueSummary": "<one sentence: what problem this edit solves>",
   "rationale": "<one to two sentences: why this change is better>",
   "proposedText": "<the replacement text for the selected span only>",
+  "shownEdit": {
+    "editType": "<what visible edit operation was shown: precision, compression, tone test, strategic framing, etc.>",
+    "proposedText": "<same replacement text as proposedText>",
+    "whyThisEdit": "<one sentence: why this shown edit helps the user think or write better>"
+  },
+  "lenses": [
+    {
+      "name": "<short lens name>",
+      "focus": "<what this lens makes visible in the selected text or source material>",
+      "sourceSignals": ["<specific phrase, claim, assumption, or evidence signal from the text/context>"],
+      "relevance": "<why this lens matters for the current task>"
+    }
+  ],
+  "provocations": [
+    {
+      "kind": "<critique | alternative | counterargument | fallacy-check | lateral-move | source-question>",
+      "stage": "<source-processing | final-output | both>",
+      "prompt": "<a concise thinking prompt, not a command to accept the AI answer>",
+      "whyItMatters": "<why this provocation could improve the user's reasoning>",
+      "optional": true
+    }
+  ],
   "riskNotes": "<optional: any risk or caveat, or null>",
   "confidence": <number 0.0 to 1.0>
 }
 `.trim();
+
+function buildToolForThoughtSection(req: SuggestionRequest): string {
+  const stage = req.workflowStage ?? "final-output";
+  const stageLabel = stage === "source-processing" ? "SOURCE PROCESSING" : "FINAL OUTPUT WRITING";
+  const activeLens = req.activeLens?.trim();
+
+  return `\n\n---TOOL-FOR-THOUGHT MODE---\nStage: ${stageLabel}\n${activeLens ? `Active lens: ${activeLens}\n` : ""}Principles from AI-as-tool-for-thought design:\n- Preserve material engagement: the user should still inspect the source or draft, not outsource judgment.\n- Lenses are task-specific micro-representations, not generic summaries; they emphasize what matters for the current decision.\n- The shown edit must make the visible writing move explicit, not only provide polished replacement text.\n- Provocations are not meant to be accepted every time; they stimulate thinking and can be rejected when the user has reason.\n- Provocations must be useful during source processing and final output writing.\n- For source processing, use provocations to test source claims, missing evidence, assumptions, and relevance.\n- For final output writing, use provocations as critiques, alternatives, counterarguments, fallacy checks, or lateral moves.`;
+}
 
 export function buildPrompt(req: SuggestionRequest): string {
   const policy = buildPromptPolicy(req);
@@ -67,6 +97,8 @@ ${policy.avoidMoves.map((item) => `- ${item}`).join("\n")}
 ---HARD GUARDRAILS---
 ${policy.guardrails.map((item) => `- ${item}`).join("\n")}${voiceSection}
 
+${buildToolForThoughtSection(req)}
+
 ---TASK---
 ${actionDesc}
 
@@ -78,6 +110,8 @@ ${req.selection.selectedText}${contextSection}${styleSection}${examplesSection}
 - Keep the rewrite anchored to the selected text only.
 - If the best edit is minimal, keep it minimal.
 - Do not become cute, whimsical, inflated, or generic.
+- Include at least one lens and at least two provocations.
+- Keep provocations short, sharp, and optional; they should make the user think, not obey.
 
 ---OUTPUT FORMAT---
 ${RESPONSE_SCHEMA}`;

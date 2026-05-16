@@ -1,9 +1,25 @@
 // Suggestion lifecycle service — Phase 3: emits telemetry, FTS5 population
 import { randomUUID } from "crypto";
 import { Database } from "bun:sqlite";
-import type { Suggestion, SuggestionStatus, SuggestionRequest } from "./suggestion-types";
+import type {
+  ShownEdit,
+  Suggestion,
+  SuggestionStatus,
+  SuggestionRequest,
+  ThoughtLens,
+  ThoughtProvocation,
+} from "./suggestion-types";
 import type { SuggestionProvider } from "../../adapters/ai/SuggestionProvider";
 import type { EventWriter } from "../telemetry/event-writer";
+
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 function rowToSuggestion(row: Record<string, unknown>): Suggestion {
   return {
@@ -22,6 +38,11 @@ function rowToSuggestion(row: Record<string, unknown>): Suggestion {
     proposedText: row.proposed_text as string,
     riskNotes: (row.risk_notes as string | null) ?? undefined,
     confidence: (row.confidence as number | null) ?? undefined,
+    workflowStage: (row.workflow_stage as Suggestion["workflowStage"] | null) ?? "final-output",
+    activeLens: (row.active_lens as string | null) ?? undefined,
+    shownEdit: parseJsonField<ShownEdit | undefined>(row.shown_edit_json, undefined),
+    lenses: parseJsonField<ThoughtLens[]>(row.lenses_json, []),
+    provocations: parseJsonField<ThoughtProvocation[]>(row.provocations_json, []),
     status: row.status as SuggestionStatus,
     editedText: (row.edited_text as string | null) ?? undefined,
     createdAt: row.created_at as string,
@@ -55,15 +76,20 @@ export class SuggestionService {
          (id, document_id, block_id, action_type, selected_text,
           char_start, char_end, context_before, context_after,
           custom_instruction, issue_summary, rationale, proposed_text,
-          risk_notes, confidence, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
+          risk_notes, confidence, workflow_stage, active_lens, shown_edit_json,
+          lenses_json, provocations_json, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
       )
       .run(
         id, req.documentId, req.blockId, req.actionType,
         req.selection.selectedText, req.selection.charStart, req.selection.charEnd,
         req.context.before, req.context.after, req.customInstruction ?? null,
         response.issueSummary, response.rationale, response.proposedText,
-        response.riskNotes ?? null, response.confidence ?? null, now, now
+        response.riskNotes ?? null, response.confidence ?? null,
+        req.workflowStage ?? "final-output", req.activeLens?.trim() || null,
+        response.shownEdit ? JSON.stringify(response.shownEdit) : null,
+        JSON.stringify(response.lenses ?? []), JSON.stringify(response.provocations ?? []),
+        now, now
       );
 
     // Populate FTS5
@@ -82,7 +108,14 @@ export class SuggestionService {
       suggestionId: id,
       eventType: "suggestion_created",
       actor: "user",
-      payload: { actionType: req.actionType, selectedTextLength: req.selection.selectedText.length },
+      payload: {
+        actionType: req.actionType,
+        selectedTextLength: req.selection.selectedText.length,
+        workflowStage: req.workflowStage ?? "final-output",
+        activeLens: req.activeLens?.trim() || null,
+        lensCount: response.lenses?.length ?? 0,
+        provocationCount: response.provocations?.length ?? 0,
+      },
     });
 
     return this.getById(id)!;

@@ -12,7 +12,7 @@ import {
   editApplySuggestion,
   deferSuggestion,
 } from "./features/suggestions/SuggestionActions";
-import type { Suggestion, EditorRole } from "../../src/domain/suggestions/suggestion-types";
+import type { Suggestion, EditorRole, SuggestionWorkflowStage } from "../../src/domain/suggestions/suggestion-types";
 import type { SelectionSpan } from "./features/editor/SelectionState";
 import { buildSelectionContextEnvelope } from "../../src/domain/suggestions/document-context";
 import { applySuggestionToDocument, createInlineAnchorId, getLineNumberForOffset } from "./features/editor/documentEditing";
@@ -24,6 +24,8 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_DOC = import.meta.env.VITE_DEFAULT_DOC ?? "sample.md";
 const DOCUMENT_ID = "doc-main";
 const ROLE_STORAGE_KEY = "writing-copilot.role";
+const WORKFLOW_STAGE_STORAGE_KEY = "writing-copilot.workflowStage";
+const ACTIVE_LENS_STORAGE_KEY = "writing-copilot.activeLens";
 const DEFAULT_EDITOR_ROLE: EditorRole = "professional-lector";
 const ROLE_OPTIONS: Array<{ value: EditorRole; label: string }> = [
   { value: "professional-lector", label: "Professional lector" },
@@ -35,7 +37,11 @@ const ROLE_OPTIONS: Array<{ value: EditorRole; label: string }> = [
 ];
 const MODEL_STORAGE_KEY = "writing-copilot.model";
 const DEFAULT_MODEL = "gpt-5.4-mini";
-const MODEL_OPTIONS = ["gpt-5.4-mini", "gpt-5.4", "gpt-5.3-codex", "gpt-4.1", "gpt-4o-mini"] as const;
+const MODEL_OPTIONS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"] as const;
+const WORKFLOW_STAGE_OPTIONS: Array<{ value: SuggestionWorkflowStage; label: string }> = [
+  { value: "source-processing", label: "Source processing" },
+  { value: "final-output", label: "Final output" },
+];
 type Tab = "editor" | "insights";
 type ApiHealth = {
   status: string;
@@ -68,6 +74,14 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     if (typeof window === "undefined") return DEFAULT_MODEL;
     return window.localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_MODEL;
+  });
+  const [workflowStage, setWorkflowStage] = useState<SuggestionWorkflowStage>(() => {
+    if (typeof window === "undefined") return "final-output";
+    return (window.localStorage.getItem(WORKFLOW_STAGE_STORAGE_KEY) as SuggestionWorkflowStage | null) || "final-output";
+  });
+  const [activeLens, setActiveLens] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(ACTIVE_LENS_STORAGE_KEY) || "";
   });
   const { content, loading, saving, error, dirty, loadDoc, updateContent, saveDoc } = useDocumentEditor();
   const {
@@ -117,6 +131,14 @@ export default function App() {
     if (typeof window !== "undefined") window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
   }, [selectedModel]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem(WORKFLOW_STAGE_STORAGE_KEY, workflowStage);
+  }, [workflowStage]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem(ACTIVE_LENS_STORAGE_KEY, activeLens);
+  }, [activeLens]);
+
   const refreshSuggestions = useCallback(async () => {
     try { setSuggestions(await fetchSuggestions(DOCUMENT_ID)); } catch {}
   }, []);
@@ -152,6 +174,8 @@ export default function App() {
         sessionId,
         model: selectedModel,
         editorRole: selectedRole,
+        workflowStage,
+        activeLens: activeLens.trim() || undefined,
       });
       setSuggestions((prev) => [next, ...prev]);
     } catch (e) {
@@ -159,7 +183,7 @@ export default function App() {
     } finally {
       setLoadingSuggestion(false);
     }
-  }, [content, selectedModel, selectedRole, sessionId]);
+  }, [activeLens, content, selectedModel, selectedRole, sessionId, workflowStage]);
 
   const handleAccept = useCallback(async (id: string) => {
     const suggestion = suggestions.find((entry) => entry.id === id);
@@ -259,6 +283,22 @@ export default function App() {
                 {MODEL_OPTIONS.map((model) => <option key={model} value={model}>{model}</option>)}
               </select>
             </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280" }}>
+              Stage
+              <select value={workflowStage} onChange={(e) => setWorkflowStage(e.target.value as SuggestionWorkflowStage)} style={{ padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "13px", background: "#fff", color: "#111827" }}>
+                {WORKFLOW_STAGE_OPTIONS.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
+              </select>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280", minWidth: "240px", flex: "0 1 320px" }}>
+              Lens
+              <input
+                type="text"
+                value={activeLens}
+                onChange={(e) => setActiveLens(e.target.value)}
+                placeholder={workflowStage === "source-processing" ? "consumer preference, evidence, assumptions" : "argument, voice, reader friction"}
+                style={{ flex: 1, minWidth: "160px", padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "13px" }}
+              />
+            </label>
             <button type="button" onClick={handleLoad} disabled={loading} style={{ padding: "8px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>{loading ? "Loading…" : "Load"}</button>
             <button type="button" onClick={handleSave} disabled={saving || !content || !dirty} style={{ padding: "8px 16px", background: dirty ? "#f59e0b" : "#9ca3af", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>{saving ? "Saving…" : "Save"}</button>
           </div>
@@ -278,6 +318,8 @@ export default function App() {
                     {dirty && " · unsaved"}
                     {" · role: "}<span style={{ color: "#6b7280" }}>{ROLE_OPTIONS.find((role) => role.value === selectedRole)?.label ?? selectedRole}</span>
                     {" · model: "}<span style={{ color: "#6b7280" }}>{selectedModel}</span>
+                    {" · stage: "}<span style={{ color: "#6b7280" }}>{WORKFLOW_STAGE_OPTIONS.find((stage) => stage.value === workflowStage)?.label ?? workflowStage}</span>
+                    {activeLens.trim() && <>{" · lens: "}<span style={{ color: "#6b7280" }}>{activeLens.trim()}</span></>}
                     {" · "}<span style={{ color: "#6b7280" }}>select text to add inline review feedback</span>
                   </div>
                   <ContinuousEditor

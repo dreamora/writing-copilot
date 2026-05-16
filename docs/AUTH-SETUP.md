@@ -35,10 +35,12 @@ export OPENAI_TEMPERATURE="0.7"
 
 When `codex` is discoverable, Bun routes suggestion requests through `codex exec` with the existing Codex login/session:
 
-- `--full-auto`
+- `--sandbox workspace-write`
 - `--output-schema` (strict JSON schema)
 - `--output-last-message` (structured extraction)
 - `--skip-git-repo-check`
+
+If the Codex subprocess fails to start or exits non-zero, the provider falls back to stub mode instead of surfacing a hard error to the UI.
 
 For non-UI troubleshooting, check `/api/health` for `providerMode: "codex"` or `authError`.
 

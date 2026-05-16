@@ -76,7 +76,7 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
         model,
         messages: [{ role: "user", content: prompt }],
         temperature: this.temperature,
-        max_tokens: 500,
+        max_tokens: 1000,
       });
 
       const text = response.choices[0]?.message?.content || "";
@@ -106,6 +106,35 @@ export class StubSuggestionProvider implements SuggestionProvider {
       issueSummary: `[STUB] Improved clarity for: "${req.selection.selectedText.slice(0, 20)}..."`,
       rationale: `This ${req.actionType} improves readability.`,
       proposedText: `[IMPROVED] ${req.selection.selectedText}`,
+      shownEdit: {
+        editType: "stub-edit",
+        proposedText: `[IMPROVED] ${req.selection.selectedText}`,
+        whyThisEdit: "Stub mode shows the replacement text without calling a live model.",
+      },
+      lenses: [
+        {
+          name: req.activeLens?.trim() || "clarity",
+          focus: "What the selected text is trying to make clear.",
+          sourceSignals: [req.selection.selectedText.slice(0, 80)],
+          relevance: `Applies during ${req.workflowStage ?? "final-output"} review.`,
+        },
+      ],
+      provocations: [
+        {
+          kind: "critique",
+          stage: req.workflowStage ?? "final-output",
+          prompt: "What judgment should remain yours before accepting this edit?",
+          whyItMatters: "Stub mode still preserves the tool-for-thought contract.",
+          optional: true,
+        },
+        {
+          kind: "alternative",
+          stage: "both",
+          prompt: "What is the strongest plausible alternative framing?",
+          whyItMatters: "Alternatives prevent the first generated edit from becoming the only path.",
+          optional: true,
+        },
+      ],
       riskNotes: "This is a stub response (no ChatGPT auth configured, token expired, or token invalid)",
       confidence: 0.5,
     };

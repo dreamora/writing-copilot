@@ -37,6 +37,9 @@ describe("Prompt builder", () => {
     const prompt = buildPrompt(BASE_REQ);
     expect(prompt).toContain("issueSummary");
     expect(prompt).toContain("proposedText");
+    expect(prompt).toContain("shownEdit");
+    expect(prompt).toContain("lenses");
+    expect(prompt).toContain("provocations");
   });
 
   it("defaults to professional lector guidance", () => {
@@ -57,5 +60,31 @@ describe("Prompt builder", () => {
     expect(prompt).toContain("Marc voice");
     expect(prompt).toContain("Grounded, sharp, practical, adult, and agency-oriented");
     expect(prompt).toContain("The more you automate, the less you actually understand.");
+  });
+
+  it("frames source processing as lens-driven material engagement", () => {
+    const prompt = buildPrompt({
+      ...BASE_REQ,
+      workflowStage: "source-processing",
+      activeLens: "consumer preference",
+    });
+
+    expect(prompt).toContain("---TOOL-FOR-THOUGHT MODE---");
+    expect(prompt).toContain("SOURCE PROCESSING");
+    expect(prompt).toContain("Active lens: consumer preference");
+    expect(prompt).toContain("Lenses are task-specific micro-representations");
+    expect(prompt).toContain("Preserve material engagement");
+  });
+
+  it("frames final output as shown edit plus provocations", () => {
+    const prompt = buildPrompt({
+      ...BASE_REQ,
+      workflowStage: "final-output",
+    });
+
+    expect(prompt).toContain("FINAL OUTPUT WRITING");
+    expect(prompt).toContain("shown edit");
+    expect(prompt).toContain("Provocations are not meant to be accepted every time");
+    expect(prompt).toContain("critiques, alternatives, counterarguments, fallacy checks, or lateral moves");
   });
 });

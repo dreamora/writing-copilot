@@ -6,9 +6,13 @@ Local writing assistant prototype with markdown editing, suggestion lifecycle, t
 
 ```bash
 bun install
-bun run db:migrate
-bun run dev:api &
-bun run dev:web
+bun run db:migrate && bun run dev:api
+```
+
+Execution flow:
+
+```bash
+bun run db:migrate && bun run dev:api
 ```
 
 Health check:
@@ -17,7 +21,7 @@ Health check:
 curl -s http://localhost:8788/api/health
 ```
 
-After building the web bundle, the API server also serves `web/dist` for non-API routes, so `http://localhost:8788/` loads the UI shell (with API routes still at `/api/*`).
+The API server runs on `http://localhost:8788/` and exposes health plus `/api/*` routes.
 
 ## ChatGPT auth setup
 
@@ -27,6 +31,7 @@ Bun supports three operational modes:
    - if `codex` is installed and you are logged in, Bun uses Codex first
    - no `OPENAI_API_KEY` is required for this path
    - optional transport knobs: `CODEX_CLI_COMMAND`, `CODEX_MODEL`, `CODEX_TIMEOUT_MS`, `CODEX_SKIP_GIT_REPO_CHECK=...`
+   - the Codex subprocess is run with `--sandbox workspace-write` and falls back to stub mode if the CLI cannot start cleanly
    - editor model dropdown defaults to `gpt-5.4-mini`
 
 2. **OpenAI API key path (fallback when Codex is unavailable)**
