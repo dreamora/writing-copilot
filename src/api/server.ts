@@ -8,6 +8,8 @@ import { CodexSuggestionProvider } from "../adapters/ai/CodexSuggestionProvider"
 import { createChatGptBrowserSessionProvider } from "../adapters/ai/ChatGptBrowserSessionProvider";
 import { createSuggestionRoutes } from "../routes/suggestions";
 import { createTelemetryRoutes } from "../routes/telemetry";
+import { AnnotationService } from "../domain/annotations/annotation-service";
+import { createAnnotationRoutes } from "../routes/annotations";
 import { EventWriter } from "../domain/telemetry/event-writer";
 import {
   ChatGptAuthError,
@@ -184,6 +186,8 @@ const eventWriter = new EventWriter(db);
 const suggestionService = new SuggestionService(db, providerBootstrap.provider, eventWriter);
 const suggestionRoutes = createSuggestionRoutes(suggestionService);
 const telemetryRoutes = createTelemetryRoutes(db);
+const annotationService = new AnnotationService(db);
+const annotationRoutes = createAnnotationRoutes(annotationService);
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -204,7 +208,7 @@ const server = Bun.serve({
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },
       });
@@ -259,6 +263,23 @@ const server = Bun.serve({
       else if (action === "edit-apply") res = await suggestionRoutes["POST /api/suggestions/:id/edit-apply"](request, id!);
       else res = await suggestionRoutes["POST /api/suggestions/:id/defer"](request, id!);
       return addCors(res);
+    }
+
+    // Annotation routes
+    const docAnnotationsMatch = pathname.match(/^\/api\/documents\/([^/]+)\/annotations$/);
+    if (docAnnotationsMatch) {
+      const [, documentId] = docAnnotationsMatch;
+      if (method === "GET") {
+        return addCors(annotationRoutes["GET /api/documents/:documentId/annotations"](request, documentId!));
+      }
+      if (method === "POST") {
+        return addCors(await annotationRoutes["POST /api/documents/:documentId/annotations"](request, documentId!));
+      }
+    }
+    const annotationDeleteMatch = pathname.match(/^\/api\/annotations\/([^/]+)$/);
+    if (method === "DELETE" && annotationDeleteMatch) {
+      const [, id] = annotationDeleteMatch;
+      return addCors(annotationRoutes["DELETE /api/annotations/:id"](request, id!));
     }
 
     if (method === "POST" && pathname === "/api/telemetry/events") {
