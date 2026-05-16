@@ -1,6 +1,11 @@
 // Bead 2.6 — Suggestion thread + actions (D3 polish: failure states, loading feedback)
 import React, { useState } from "react";
 import type { Suggestion } from "../../../../src/domain/suggestions/suggestion-types";
+import {
+  getActionContract,
+  getCuratedLens,
+  getProfessionalModeContract,
+} from "../../../../src/domain/suggestions/professional-mode-contracts";
 import SuggestionDiff from "./SuggestionDiff";
 
 interface SuggestionThreadProps {
@@ -37,6 +42,9 @@ export default function SuggestionThread({
   const isDecided = suggestion.status !== "open" && suggestion.status !== "deferred";
   const lenses = suggestion.lenses ?? [];
   const provocations = suggestion.provocations ?? [];
+  const roleContract = getProfessionalModeContract(suggestion.editorRole);
+  const actionContract = getActionContract(roleContract.role, suggestion.actionType);
+  const activeLens = getCuratedLens(suggestion.activeLens);
 
   const handleAcceptClick = async () => {
     setLoadingAction("accept");
@@ -125,7 +133,7 @@ export default function SuggestionThread({
           {badge.label}
         </span>
         <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-          {suggestion.actionType} · {new Date(suggestion.createdAt).toLocaleTimeString()}
+          {actionContract.label} · {new Date(suggestion.createdAt).toLocaleTimeString()}
         </span>
       </div>
 
@@ -145,8 +153,14 @@ export default function SuggestionThread({
       {(suggestion.workflowStage || suggestion.activeLens || suggestion.shownEdit) && (
         <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
           <div>
+            <strong>Mode:</strong> {roleContract.label}
+            {" · "}
             <strong>Stage:</strong> {suggestion.workflowStage ?? "final-output"}
-            {suggestion.activeLens && <> · <strong>Lens:</strong> {suggestion.activeLens}</>}
+            {suggestion.activeLens && <> · <strong>Lens:</strong> {activeLens?.label ?? suggestion.activeLens}</>}
+          </div>
+          <div style={{ marginTop: "4px" }}>
+            <strong>Action:</strong> {actionContract.label}
+            <span style={{ color: "#6b7280" }}> — {actionContract.description}</span>
           </div>
           {suggestion.shownEdit && (
             <div style={{ marginTop: "4px" }}>

@@ -14,6 +14,12 @@ import {
   reopenSuggestion,
 } from "./features/suggestions/SuggestionActions";
 import type { Suggestion, EditorRole, SuggestionWorkflowStage } from "../../src/domain/suggestions/suggestion-types";
+import {
+  getCuratedLenses,
+  getProfessionalModeContract,
+  normalizeCuratedLensId,
+  PROFESSIONAL_MODE_CONTRACTS,
+} from "../../src/domain/suggestions/professional-mode-contracts";
 import type { SelectionSpan } from "./features/editor/SelectionState";
 import { buildSelectionContextEnvelope } from "../../src/domain/suggestions/document-context";
 import { applySuggestionToDocument, createInlineAnchorId } from "./features/editor/documentEditing";
@@ -28,14 +34,9 @@ const ROLE_STORAGE_KEY = "writing-copilot.role";
 const WORKFLOW_STAGE_STORAGE_KEY = "writing-copilot.workflowStage";
 const ACTIVE_LENS_STORAGE_KEY = "writing-copilot.activeLens";
 const DEFAULT_EDITOR_ROLE: EditorRole = "professional-lector";
-const ROLE_OPTIONS: Array<{ value: EditorRole; label: string }> = [
-  { value: "professional-lector", label: "Professional lector" },
-  { value: "rigorous-reviewer", label: "Rigorous reviewer" },
-  { value: "precise-editor", label: "Precise editor" },
-  { value: "sharp-stylist", label: "Sharp stylist" },
-  { value: "joyful-but-adult", label: "Joyful but adult" },
-  { value: "marc-voice", label: "Marc voice" },
-];
+const ROLE_OPTIONS: Array<{ value: EditorRole; label: string }> = Object.values(PROFESSIONAL_MODE_CONTRACTS)
+  .map((contract) => ({ value: contract.role, label: contract.label }));
+const LENS_OPTIONS = getCuratedLenses();
 const MODEL_STORAGE_KEY = "writing-copilot.model";
 const DEFAULT_MODEL = "gpt-5.4-mini";
 const MODEL_OPTIONS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"] as const;
@@ -82,7 +83,7 @@ export default function App() {
   });
   const [activeLens, setActiveLens] = useState<string>(() => {
     if (typeof window === "undefined") return "";
-    return window.localStorage.getItem(ACTIVE_LENS_STORAGE_KEY) || "";
+    return normalizeCuratedLensId(window.localStorage.getItem(ACTIVE_LENS_STORAGE_KEY) || "") || "";
   });
   const { content, loading, saving, error, dirty, loadDoc, updateContent, saveDoc } = useDocumentEditor();
   const {
@@ -176,7 +177,7 @@ export default function App() {
         model: selectedModel,
         editorRole: selectedRole,
         workflowStage,
-        activeLens: activeLens.trim() || undefined,
+        activeLens: normalizeCuratedLensId(activeLens),
       });
       setSuggestions((prev) => [next, ...prev]);
     } catch (e) {
@@ -221,6 +222,8 @@ export default function App() {
 
   const actionableSuggestionsCount = suggestions.filter((s) => s.status === "open").length;
   const suggestionSummaryRefreshKey = suggestions.map((s) => `${s.id}:${s.status}:${s.updatedAt}`).join("|");
+  const selectedRoleLabel = getProfessionalModeContract(selectedRole).label;
+  const activeLensOption = LENS_OPTIONS.find((lens) => lens.id === activeLens);
   const providerBadgeLabel = apiHealth?.providerMode === "chatgpt" ? "AI live"
     : apiHealth?.providerMode === "browser-session" ? "AI browser"
     : apiHealth?.providerMode === "codex" ? "AI codex"
@@ -238,7 +241,7 @@ export default function App() {
   });
 
   return (
-    <div style={{ width: "100%", maxWidth: "none", margin: 0, padding: "0 clamp(12px, 2vw, 24px) 24px", fontFamily: "sans-serif" }}>
+    <div style={{ width: "100%", maxWidth: "none", margin: 0, padding: "0 clamp(12px, 2vw, 24px) 24px", boxSizing: "border-box", fontFamily: "sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "16px", marginBottom: 0 }}>
         <h1 style={{ fontSize: "18px", fontWeight: 700, margin: 0 }}>Writing Copilot</h1>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -298,13 +301,15 @@ export default function App() {
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6b7280", minWidth: "240px", flex: "0 1 320px" }}>
               Lens
-              <input
-                type="text"
+              <select
                 value={activeLens}
                 onChange={(e) => setActiveLens(e.target.value)}
-                placeholder={workflowStage === "source-processing" ? "consumer preference, evidence, assumptions" : "argument, voice, reader friction"}
-                style={{ flex: 1, minWidth: "160px", padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "13px" }}
-              />
+                title={activeLensOption?.purpose ?? "Choose a curated thinking lens"}
+                style={{ flex: 1, minWidth: "160px", padding: "8px", border: "1px solid #d1d5db", borderRadius: "4px", fontSize: "13px", background: "#fff", color: "#111827" }}
+              >
+                <option value="">No lens</option>
+                {LENS_OPTIONS.map((lens) => <option key={lens.id} value={lens.id}>{lens.label}</option>)}
+              </select>
             </label>
             <button type="button" onClick={handleLoad} disabled={loading} style={{ padding: "8px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>{loading ? "Loading…" : "Load"}</button>
             <button type="button" onClick={handleSave} disabled={saving || !content || !dirty} style={{ padding: "8px 16px", background: dirty ? "#f59e0b" : "#9ca3af", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>{saving ? "Saving…" : "Save"}</button>
@@ -316,17 +321,17 @@ export default function App() {
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: content ? `minmax(0, 1fr)${showSidebar ? " 380px" : ""}${showAnnotations ? " 280px" : ""}` : "minmax(0, 1fr)", gap: "20px" }}>
-            <div>
+          <section className="editor-workspace" aria-label="Writing workspace">
+            <main className="editor-main">
               {content ? (
                 <>
                   <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>
                     one continuous document field
                     {dirty && " · unsaved"}
-                    {" · role: "}<span style={{ color: "#6b7280" }}>{ROLE_OPTIONS.find((role) => role.value === selectedRole)?.label ?? selectedRole}</span>
+                    {" · role: "}<span style={{ color: "#6b7280" }}>{selectedRoleLabel}</span>
                     {" · model: "}<span style={{ color: "#6b7280" }}>{selectedModel}</span>
                     {" · stage: "}<span style={{ color: "#6b7280" }}>{WORKFLOW_STAGE_OPTIONS.find((stage) => stage.value === workflowStage)?.label ?? workflowStage}</span>
-                    {activeLens.trim() && <>{" · lens: "}<span style={{ color: "#6b7280" }}>{activeLens.trim()}</span></>}
+                    {activeLensOption && <>{" · lens: "}<span style={{ color: "#6b7280" }}>{activeLensOption.label}</span></>}
                     {" · "}<span style={{ color: "#6b7280" }}>select text to add inline review feedback</span>
                   </div>
                   <ContinuousEditor
@@ -335,6 +340,7 @@ export default function App() {
                     dirty={dirty}
                     onChange={updateContent}
                     onRequestSuggestion={handleRequestSuggestion}
+                    editorRole={selectedRole}
                     loadingSuggestion={loadingSuggestion}
                     annotationHighlights={annotationHighlights}
                     onAnnotate={handleAnnotate}
@@ -344,41 +350,72 @@ export default function App() {
               ) : (
                 <div style={{ color: "#9ca3af", textAlign: "center", padding: "40px" }}>Enter a document path and click Load to begin reviewing a full document.</div>
               )}
-            </div>
+            </main>
 
-            {content && showSidebar && (
-              <div>
-                <CompactSummary documentId={DOCUMENT_ID} sessionId={sessionId} refreshKey={suggestionSummaryRefreshKey} />
-                <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
-                  Review threads
-                </div>
-                <ReviewThreadList
-                  content={content}
-                  suggestions={suggestions}
-                  onAccept={handleAccept}
-                  onReject={handleReject}
-                  onEditApply={handleEditApply}
-                  onDefer={handleDefer}
-                  onReopen={handleReopen}
-                />
-              </div>
-            )}
+            {content && (showSidebar || showAnnotations) && (
+              <aside className="editor-secondary-panels" aria-label="Review context">
+                {showSidebar && (
+                  <div>
+                    <CompactSummary documentId={DOCUMENT_ID} sessionId={sessionId} refreshKey={suggestionSummaryRefreshKey} />
+                    <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
+                      Review threads
+                    </div>
+                    <ReviewThreadList
+                      content={content}
+                      suggestions={suggestions}
+                      onAccept={handleAccept}
+                      onReject={handleReject}
+                      onEditApply={handleEditApply}
+                      onDefer={handleDefer}
+                      onReopen={handleReopen}
+                    />
+                  </div>
+                )}
 
-            {content && showAnnotations && (
-              <AnnotationPanel
-                annotations={annotations}
-                selectedAnnotationId={selectedAnnotationId}
-                onSelect={setSelectedAnnotationId}
-                onDelete={deleteAnnotation}
-                isLoading={annotationsLoading}
-                error={annotationsError}
-              />
+                {showAnnotations && (
+                  <AnnotationPanel
+                    annotations={annotations}
+                    selectedAnnotationId={selectedAnnotationId}
+                    onSelect={setSelectedAnnotationId}
+                    onDelete={deleteAnnotation}
+                    isLoading={annotationsLoading}
+                    error={annotationsError}
+                  />
+                )}
+              </aside>
             )}
-          </div>
+          </section>
         </>
       )}
 
       {activeTab === "insights" && <InsightsPage />}
+      <style>{`
+        .editor-workspace {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 18px;
+          width: 100%;
+        }
+
+        .editor-main {
+          min-width: 0;
+          width: 100%;
+        }
+
+        .editor-secondary-panels {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+          gap: 16px;
+          align-items: start;
+          width: 100%;
+        }
+
+        @media (min-width: 1280px) {
+          .editor-secondary-panels {
+            grid-template-columns: minmax(360px, 1.1fr) minmax(260px, 0.9fr);
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // Bead 1.5 + 2.1 — Block editor with selection capture
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import type { Block } from "../../../../src/domain/blocks/block";
-import type { SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
+import type { EditorRole, SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
 import { captureSelection, computePopoverPosition } from "./SelectionState";
 import type { SelectionSpan, PopoverPosition } from "./SelectionState";
 import SelectionPopover from "./SelectionPopover";
@@ -17,6 +17,7 @@ interface BlockEditorProps {
     customInstruction?: string
   ) => void;
   loadingSuggestionBlockId?: string;
+  editorRole?: EditorRole;
 }
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
@@ -89,6 +90,7 @@ export default function BlockEditor({
   dirtyIds = new Set(),
   onRequestSuggestion,
   loadingSuggestionBlockId,
+  editorRole,
 }: BlockEditorProps) {
   const [activeSelection, setActiveSelection] = useState<SelectionSpan | null>(null);
   const [popoverPos, setPopoverPos] = useState<PopoverPosition | null>(null);
@@ -196,6 +198,7 @@ export default function BlockEditor({
           position={popoverPos}
           onAction={handlePopoverAction}
           onClose={closePopover}
+          editorRole={editorRole}
           loading={loadingSuggestionBlockId === activeSelection.blockId}
         />
       )}

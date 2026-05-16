@@ -1,4 +1,9 @@
 import OpenAI from "openai";
+import {
+  getActionContract,
+  getCuratedLens,
+  getProfessionalModeContract,
+} from "../../domain/suggestions/professional-mode-contracts";
 import { buildPrompt } from "../../domain/suggestions/prompt-builder";
 import { parseModelResponse } from "../../domain/suggestions/response-parser";
 import type { SuggestionProvider } from "./SuggestionProvider";
@@ -102,35 +107,49 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
 
 export class StubSuggestionProvider implements SuggestionProvider {
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
+    const contract = getProfessionalModeContract(req.editorRole);
+    const action = getActionContract(contract.role, req.actionType);
+    const lens = getCuratedLens(req.activeLens);
+    const lensName = lens?.label ?? "Professional contract";
+    const lensFocus = lens
+      ? contract.lensInterpretations[lens.id]
+      : contract.sharedActionInterpretations.rewrite;
+    const focus = req.actionType === "de-slop"
+      ? `AI residue removal: ${action.promptInstruction} Lens behavior: ${lensFocus}`
+      : lensFocus;
+    const stage = req.workflowStage ?? "final-output";
+
     return {
-      issueSummary: `[STUB] Improved clarity for: "${req.selection.selectedText.slice(0, 20)}..."`,
-      rationale: `This ${req.actionType} improves readability.`,
-      proposedText: `[IMPROVED] ${req.selection.selectedText}`,
+      issueSummary: `[STUB] ${contract.label} used ${action.label} for: "${req.selection.selectedText.slice(0, 20)}..."`,
+      rationale: `${action.label} follows the ${contract.label} contract through the ${lensName} lens.`,
+      proposedText: `[${contract.shortLabel.toUpperCase()}] ${req.selection.selectedText}`,
       shownEdit: {
-        editType: "stub-edit",
-        proposedText: `[IMPROVED] ${req.selection.selectedText}`,
-        whyThisEdit: "Stub mode shows the replacement text without calling a live model.",
+        editType: action.label,
+        proposedText: `[${contract.shortLabel.toUpperCase()}] ${req.selection.selectedText}`,
+        whyThisEdit: `Stub mode shows how ${contract.label} would make ${action.label} visible.`,
       },
       lenses: [
         {
-          name: req.activeLens?.trim() || "clarity",
-          focus: "What the selected text is trying to make clear.",
+          name: lensName,
+          focus,
           sourceSignals: [req.selection.selectedText.slice(0, 80)],
-          relevance: `Applies during ${req.workflowStage ?? "final-output"} review.`,
+          relevance: lens?.relevance ?? `Applies the ${contract.label} contract during ${stage} review.`,
         },
       ],
       provocations: [
         {
-          kind: "critique",
-          stage: req.workflowStage ?? "final-output",
-          prompt: "What judgment should remain yours before accepting this edit?",
+          kind: stage === "source-processing" ? "source-question" : "critique",
+          stage,
+          prompt: `What would ${contract.label} challenge before accepting this ${action.label} suggestion?`,
           whyItMatters: "Stub mode still preserves the tool-for-thought contract.",
           optional: true,
         },
         {
           kind: "alternative",
           stage: "both",
-          prompt: "What is the strongest plausible alternative framing?",
+          prompt: lens
+            ? `What changes if you apply a different lens than ${lens.label}?`
+            : "What is the strongest plausible alternative framing?",
           whyItMatters: "Alternatives prevent the first generated edit from becoming the only path.",
           optional: true,
         },

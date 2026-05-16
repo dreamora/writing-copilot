@@ -1,6 +1,9 @@
 // Bead 2.1 — Selection popover action menu
 import React, { useState, useRef, useEffect } from "react";
-import type { SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
+import {
+  getAvailableActionsForRole,
+} from "../../../../src/domain/suggestions/professional-mode-contracts";
+import type { EditorRole, SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
 import type { SelectionSpan, PopoverPosition } from "./SelectionState";
 
 interface SelectionPopoverProps {
@@ -8,23 +11,17 @@ interface SelectionPopoverProps {
   position: PopoverPosition;
   onAction: (actionType: SuggestionActionType, customInstruction?: string) => void;
   onClose: () => void;
+  editorRole?: EditorRole;
   loading?: boolean;
   onAnnotate?: (commentText: string) => void | Promise<void>;
 }
-
-const ACTION_BUTTONS: Array<{ type: SuggestionActionType; label: string; title: string }> = [
-  { type: "rewrite", label: "↺ Rewrite", title: "Rewrite for clarity and flow" },
-  { type: "tighten", label: "✂ Tighten", title: "Remove redundancy and filler" },
-  { type: "clarify", label: "💡 Clarify", title: "Make easier to understand" },
-  { type: "ask", label: "? Ask", title: "Ask a question about this text" },
-  { type: "custom", label: "✎ Custom", title: "Custom instruction" },
-];
 
 export default function SelectionPopover({
   selection,
   position,
   onAction,
   onClose,
+  editorRole,
   loading = false,
   onAnnotate,
 }: SelectionPopoverProps) {
@@ -66,6 +63,8 @@ export default function SelectionPopover({
       onAction("custom", customInstruction.trim());
     }
   };
+
+  const actionButtons = getAvailableActionsForRole(editorRole);
 
   const handleAnnotateSubmit = async () => {
     const text = annotationText.trim();
@@ -235,11 +234,11 @@ export default function SelectionPopover({
         </div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-          {ACTION_BUTTONS.map((btn) => (
+          {actionButtons.map((btn) => (
             <button
               key={btn.type}
               onClick={() => handleAction(btn.type)}
-              title={btn.title}
+              title={btn.description}
               style={{
                 padding: "5px 10px",
                 background: "#f3f4f6",
@@ -251,6 +250,7 @@ export default function SelectionPopover({
                 fontWeight: 500,
               }}
             >
+              {btn.type === "rewrite" ? "↺ " : btn.type === "tighten" ? "✂ " : btn.type === "clarify" ? "💡 " : btn.type === "de-slop" ? "◇ " : btn.type === "ask" ? "? " : btn.type === "custom" ? "✎ " : ""}
               {btn.label}
             </button>
           ))}

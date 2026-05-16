@@ -13,7 +13,7 @@ function createTestDb(): Database {
   const db = new Database(":memory:");
   db.exec("PRAGMA journal_mode=WAL;");
   const migDir = join(import.meta.dir, "../../src/db/migrations");
-  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql"]) {
+  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql", "007_professional_mode_context.sql"]) {
     db.exec(readFileSync(join(migDir, f), "utf-8"));
   }
   return db;
@@ -141,19 +141,74 @@ describe("Suggestion flow (integration)", () => {
     const thoughtService = new SuggestionService(db, new ThoughtProvider(), ew);
     const s = await thoughtService.createSuggestion({
       ...BASE_REQ,
+      editorRole: "rigorous-reviewer",
       workflowStage: "source-processing",
-      activeLens: "consumer preference",
+      activeLens: "evidence-quality",
     });
 
+    expect(s.editorRole).toBe("rigorous-reviewer");
     expect(s.workflowStage).toBe("source-processing");
-    expect(s.activeLens).toBe("consumer preference");
+    expect(s.activeLens).toBe("evidence-quality");
     expect(s.shownEdit?.editType).toBe("decision-framing");
     expect(s.lenses?.[0]?.name).toBe("consumer preference");
     expect(s.provocations?.[0]?.stage).toBe("source-processing");
 
     const fetched = thoughtService.getById(s.id);
+    expect(fetched?.editorRole).toBe("rigorous-reviewer");
     expect(fetched?.shownEdit?.whyThisEdit).toContain("strategic move");
     expect(fetched?.lenses?.[0]?.sourceSignals[0]).toContain("convenience");
     expect(fetched?.provocations?.[0]?.prompt).toContain("Which segment");
+  });
+
+  it("uses source-processing provocations for professional mode source review", async () => {
+    const s = await service.createSuggestion({
+      ...BASE_REQ,
+      editorRole: "rigorous-reviewer",
+      actionType: "evidence-stress-test",
+      workflowStage: "source-processing",
+      activeLens: "evidence-quality",
+    });
+
+    expect(s.editorRole).toBe("rigorous-reviewer");
+    expect(s.actionType).toBe("evidence-stress-test");
+    expect(s.activeLens).toBe("evidence-quality");
+    expect(s.provocations[0]?.kind).toBe("source-question");
+    expect(s.provocations[0]?.stage).toBe("source-processing");
+    expect(s.lenses[0]?.focus).toContain("Stress-test");
+  });
+
+  it("uses final-output provocations for professional mode writing review", async () => {
+    const s = await service.createSuggestion({
+      ...BASE_REQ,
+      editorRole: "sharp-stylist",
+      actionType: "sharpen-contrast",
+      workflowStage: "final-output",
+      activeLens: "reader-friction",
+    });
+
+    expect(s.editorRole).toBe("sharp-stylist");
+    expect(s.actionType).toBe("sharpen-contrast");
+    expect(s.activeLens).toBe("reader-friction");
+    expect(s.provocations[0]?.kind).toBe("critique");
+    expect(s.provocations[0]?.stage).toBe("final-output");
+    expect(s.lenses[0]?.focus).toContain("Use style to remove friction");
+  });
+
+  it("persists de-slop suggestions as a professional mode action", async () => {
+    const s = await service.createSuggestion({
+      ...BASE_REQ,
+      editorRole: "marc-voice",
+      actionType: "de-slop",
+      workflowStage: "final-output",
+      activeLens: "voice-fidelity",
+    });
+
+    expect(s.editorRole).toBe("marc-voice");
+    expect(s.actionType).toBe("de-slop");
+    expect(s.activeLens).toBe("voice-fidelity");
+    expect(s.lenses[0]?.focus).toContain("AI residue");
+
+    const fetched = service.getById(s.id);
+    expect(fetched?.actionType).toBe("de-slop");
   });
 });

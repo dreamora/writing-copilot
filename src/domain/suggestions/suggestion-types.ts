@@ -5,7 +5,20 @@ export type SuggestionActionType =
   | "rewrite"
   | "tighten"
   | "clarify"
-  | "custom";
+  | "de-slop"
+  | "custom"
+  | "flow-check"
+  | "register-check"
+  | "challenge-claim"
+  | "evidence-stress-test"
+  | "disambiguate"
+  | "cut-to-exact-claim"
+  | "sharpen-contrast"
+  | "improve-cadence"
+  | "add-warmth"
+  | "lift-without-cuteness"
+  | "agency-frame"
+  | "ground-the-claim";
 
 export type SuggestionWorkflowStage = "source-processing" | "final-output";
 
@@ -26,6 +39,14 @@ export type EditorRole =
   | "sharp-stylist"
   | "joyful-but-adult"
   | "marc-voice";
+
+export type CuratedLensId =
+  | "evidence-quality"
+  | "reader-friction"
+  | "strategic-risk"
+  | "voice-fidelity"
+  | "commercial-implication"
+  | "source-relevance";
 
 export type SuggestionStatus =
   | "open"
@@ -113,6 +134,7 @@ export interface Suggestion {
   proposedText: string;
   riskNotes?: string;
   confidence?: number;
+  editorRole?: EditorRole;
   workflowStage: SuggestionWorkflowStage;
   activeLens?: string;
   shownEdit?: ShownEdit;

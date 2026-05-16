@@ -1,11 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
+import type { ZodIssue } from "zod";
 
 export const DEFAULT_CHATGPT_AUTH_PATH = ".secrets/chatgpt-auth.json";
 export const CHATGPT_AUTH_ENV_VAR = "CHATGPT_AUTH_PATH";
 
 const OAUTH_EXPIRES_MS_THRESHOLD = 1_000_000_000_000;
+const OAUTH_EXPIRES_SECONDS_MIN = 1_000_000_000;
 
 const OpenAiOauthSchema = z.object({
   type: z.literal("oauth"),
@@ -24,7 +26,9 @@ const ChatGptAuthSchema = z.object({
   openai: z.union([
     OpenAiOauthSchema.transform((auth) => ({
       ...auth,
-      expires: auth.expires < OAUTH_EXPIRES_MS_THRESHOLD ? auth.expires * 1000 : auth.expires,
+      expires: auth.expires >= OAUTH_EXPIRES_SECONDS_MIN && auth.expires < OAUTH_EXPIRES_MS_THRESHOLD
+        ? auth.expires * 1000
+        : auth.expires,
     })),
     OpenAiApiKeySchema,
   ]),
@@ -77,21 +81,20 @@ export function isChatGptAccessExpired(auth: ChatGptAuthConfig, now = Date.now()
 }
 
 function loadFromEnv(env: NodeJS.ProcessEnv): ChatGptAuthConfig | null {
-  const apiKey = env.OPENAI_API_KEY?.trim();
+  const apiKey = getEnvValue(env, "OPENAI_API_KEY")?.trim();
   if (!apiKey) {
     return null;
   }
+  const temperature = getEnvValue(env, "OPENAI_TEMPERATURE");
 
   const parsed: ChatGptAuthConfig = {
     openai: {
       type: "api-key",
       apiKey,
     },
-    model: env.OPENAI_MODEL || undefined,
-    baseURL: env.OPENAI_BASE_URL || undefined,
-    temperature: env.OPENAI_TEMPERATURE
-      ? Number(env.OPENAI_TEMPERATURE)
-      : undefined,
+    model: getEnvValue(env, "OPENAI_MODEL") ?? undefined,
+    baseURL: getEnvValue(env, "OPENAI_BASE_URL") ?? undefined,
+    temperature: temperature ? Number(temperature) : undefined,
   };
 
   const result = ChatGptAuthSchema.safeParse(parsed);
@@ -104,6 +107,12 @@ function loadFromEnv(env: NodeJS.ProcessEnv): ChatGptAuthConfig | null {
   }
 
   return result.data;
+}
+
+function getEnvValue(env: NodeJS.ProcessEnv, key: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(env, key)
+    ? env[key]
+    : process.env[key];
 }
 
 export function loadChatGptAuth(
@@ -149,15 +158,29 @@ export function loadChatGptAuth(
 
   const result = ChatGptAuthSchema.safeParse(parsed);
   if (!result.success) {
-    const issues = result.error.issues
-      .map((issue) => issue.path.join(".") || issue.message)
-      .join(", ");
+    const issues = formatZodIssues(result.error.issues);
     throw new ChatGptAuthError(
       "invalid-schema",
-      `ChatGPT auth file at ${authPath} must contain either OAuth under openai or api-key style config (${issues}). Update the file to match .secrets/chatgpt-auth.json.example.`,
+      `ChatGPT auth file at ${authPath} must contain an OAuth login object under openai or api-key style config. Missing or invalid fields: ${issues}. Update the file to match .secrets/chatgpt-auth.json.example.`,
       authPath
     );
   }
 
   return result.data;
+}
+
+function formatZodIssues(issues: ZodIssue[]): string {
+  const formatted = issues.flatMap((issue) => {
+    if (issue.code === "invalid_union") {
+      return issue.unionErrors.flatMap((error) => error.issues).map(formatZodIssue);
+    }
+    return [formatZodIssue(issue)];
+  });
+
+  return formatted.join(", ");
+}
+
+function formatZodIssue(issue: ZodIssue): string {
+  const path = issue.path.join(".");
+  return path ? `${path}: ${issue.message}` : issue.message;
 }

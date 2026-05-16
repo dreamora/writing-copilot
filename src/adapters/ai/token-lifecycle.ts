@@ -46,7 +46,7 @@ export function sanitizeAuthError(error: unknown): string {
   }
   const msg = String(err?.message || "").toLowerCase();
   if (msg.includes("api key") || msg.includes("token")) {
-    return "Invalid access token in auth file.";
+    return "Invalid OAuth access token in auth file. Refresh ChatGPT auth or switch to a valid OpenAI API key.";
   }
   if (msg.includes("quota")) {
     return "API quota exceeded. Check your OpenAI account.";

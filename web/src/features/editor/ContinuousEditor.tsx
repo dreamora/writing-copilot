@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import type { SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
+import type { EditorRole, SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
 import {
   captureRenderedSelection,
   captureSelection,
@@ -21,6 +21,7 @@ interface ContinuousEditorProps {
     actionType: SuggestionActionType,
     customInstruction?: string
   ) => void;
+  editorRole?: EditorRole;
   loadingSuggestion?: boolean;
   annotationHighlights?: AnnotationHighlight[];
   onAnnotate?: (selection: SelectionSpan, commentText: string) => void | Promise<void>;
@@ -33,6 +34,7 @@ export default function ContinuousEditor({
   dirty,
   onChange,
   onRequestSuggestion,
+  editorRole,
   loadingSuggestion = false,
   annotationHighlights,
   onAnnotate,
@@ -118,14 +120,14 @@ export default function ContinuousEditor({
         style={{
           width: "100%",
           minHeight: showSourceEditor ? "50vh" : "72vh",
-          padding: "32px clamp(20px, 5vw, 72px)",
+          padding: "28px clamp(18px, 3vw, 44px)",
           border: dirty ? "1px solid #f59e0b" : "1px solid #d1d5db",
           borderRadius: "16px",
           background: dirty ? "#fffbeb" : "#fff",
           boxSizing: "border-box",
           color: "#111827",
           lineHeight: 1.75,
-          fontSize: "18px",
+          fontSize: "17px",
           overflowWrap: "anywhere",
           boxShadow: "0 10px 30px rgba(15, 23, 42, 0.04)",
         }}
@@ -184,6 +186,7 @@ export default function ContinuousEditor({
           position={popoverPos}
           onAction={handlePopoverAction}
           onClose={closePopover}
+          editorRole={editorRole}
           loading={loadingSuggestion}
           onAnnotate={onAnnotate ? handlePopoverAnnotate : undefined}
         />

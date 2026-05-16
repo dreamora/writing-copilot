@@ -38,6 +38,7 @@ function rowToSuggestion(row: Record<string, unknown>): Suggestion {
     proposedText: row.proposed_text as string,
     riskNotes: (row.risk_notes as string | null) ?? undefined,
     confidence: (row.confidence as number | null) ?? undefined,
+    editorRole: (row.editor_role as Suggestion["editorRole"] | null) ?? "professional-lector",
     workflowStage: (row.workflow_stage as Suggestion["workflowStage"] | null) ?? "final-output",
     activeLens: (row.active_lens as string | null) ?? undefined,
     shownEdit: parseJsonField<ShownEdit | undefined>(row.shown_edit_json, undefined),
@@ -77,9 +78,9 @@ export class SuggestionService {
          (id, document_id, block_id, action_type, selected_text,
           char_start, char_end, context_before, context_after,
           custom_instruction, issue_summary, rationale, proposed_text,
-          risk_notes, confidence, workflow_stage, active_lens, shown_edit_json,
+          risk_notes, confidence, editor_role, workflow_stage, active_lens, shown_edit_json,
           lenses_json, provocations_json, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
       )
       .run(
         id, req.documentId, req.blockId, req.actionType,
@@ -87,7 +88,7 @@ export class SuggestionService {
         req.context.before, req.context.after, req.customInstruction ?? null,
         response.issueSummary, response.rationale, response.proposedText,
         response.riskNotes ?? null, response.confidence ?? null,
-        req.workflowStage ?? "final-output", req.activeLens?.trim() || null,
+        req.editorRole ?? "professional-lector", req.workflowStage ?? "final-output", req.activeLens?.trim() || null,
         response.shownEdit ? JSON.stringify(response.shownEdit) : null,
         JSON.stringify(response.lenses ?? []), JSON.stringify(response.provocations ?? []),
         now, now
@@ -111,6 +112,7 @@ export class SuggestionService {
       actor: "user",
       payload: {
         actionType: req.actionType,
+        editorRole: req.editorRole ?? "professional-lector",
         selectedTextLength: req.selection.selectedText.length,
         workflowStage: req.workflowStage ?? "final-output",
         activeLens: req.activeLens?.trim() || null,

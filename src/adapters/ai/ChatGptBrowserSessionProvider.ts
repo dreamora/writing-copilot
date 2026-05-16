@@ -51,6 +51,12 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
       );
     }
 
+    if (!isCurrentSuggestionRequest(req)) {
+      throw new Error(
+        "ChatGPT browser-session suggestion transport is not yet implemented for legacy request shapes."
+      );
+    }
+
     const prompt = buildPrompt(req);
 
     try {
@@ -321,6 +327,20 @@ export class ChatGptBrowserSessionProvider implements SuggestionProvider {
       ),
     ]);
   }
+}
+
+function isCurrentSuggestionRequest(req: SuggestionRequest): boolean {
+  return Boolean(
+    req.documentId &&
+      req.blockId &&
+      req.selection &&
+      typeof req.selection.charStart === "number" &&
+      typeof req.selection.charEnd === "number" &&
+      typeof req.selection.selectedText === "string" &&
+      req.context &&
+      typeof req.context.before === "string" &&
+      typeof req.context.after === "string"
+  );
 }
 
 export function createChatGptBrowserSessionProvider(

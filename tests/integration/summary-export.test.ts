@@ -20,7 +20,7 @@ function createTestDb(): Database {
   const db = new Database(":memory:");
   db.exec("PRAGMA journal_mode=WAL;");
   const migDir = join(import.meta.dir, "../../src/db/migrations");
-  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql"]) {
+  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql", "007_professional_mode_context.sql"]) {
     db.exec(readFileSync(join(migDir, f), "utf-8"));
   }
   return db;

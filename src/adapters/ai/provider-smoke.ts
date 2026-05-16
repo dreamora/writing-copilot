@@ -11,6 +11,9 @@ export function buildProviderSmokeRequest(): SuggestionRequest {
     documentId: "smoke-doc",
     blockId: "smoke-block",
     actionType: "clarify",
+    editorRole: "rigorous-reviewer",
+    workflowStage: "source-processing",
+    activeLens: "evidence-quality",
     selection: {
       selectedText: "This paragraph should communicate the point more clearly.",
       charStart: 0,

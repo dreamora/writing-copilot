@@ -55,6 +55,42 @@ describe("ReviewThreadList", () => {
     expect(html).not.toContain("<details open");
   });
 
+  it("shows the professional mode, specialist action, and curated lens context", () => {
+    const suggestion = {
+      ...makeSuggestion("mode-1", "open"),
+      editorRole: "marc-voice",
+      actionType: "agency-frame",
+      activeLens: "voice-fidelity",
+      shownEdit: {
+        editType: "agency frame",
+        proposedText: "Agency is the point.",
+        whyThisEdit: "It makes responsibility visible.",
+      },
+    } satisfies Suggestion;
+
+    const html = renderReviewThreadList([suggestion]);
+
+    expect(html).toContain("Marc voice");
+    expect(html).toContain("Agency frame");
+    expect(html).toContain("Voice fidelity");
+    expect(html).toContain("It makes responsibility visible.");
+  });
+
+  it("shows the de-slop action context in review threads", () => {
+    const suggestion = {
+      ...makeSuggestion("deslop-1", "open"),
+      editorRole: "marc-voice",
+      actionType: "de-slop",
+      activeLens: "voice-fidelity",
+    } satisfies Suggestion;
+
+    const html = renderReviewThreadList([suggestion]);
+
+    expect(html).toContain("Marc voice");
+    expect(html).toContain("De-slop");
+    expect(html).toContain("Voice fidelity");
+  });
+
   it("keeps settled history collapsed when no actionable threads remain", () => {
     const html = renderReviewThreadList([
       makeSuggestion("accepted-1", "accepted"),
