@@ -91,6 +91,30 @@ describe("ReviewThreadList", () => {
     expect(html).toContain("Voice fidelity");
   });
 
+  it("shows selected workspace context provenance without claiming influence", () => {
+    const suggestion = {
+      ...makeSuggestion("context-1", "open"),
+      workspaceContext: [
+        {
+          documentId: "workspace:abc:sources/source.md",
+          title: "source.md",
+          relativePath: "sources/source.md",
+          inclusionMode: "full",
+          charCount: 30,
+          includedCharCount: 30,
+          contentHash: "hash-1",
+          warningKinds: [],
+        },
+      ],
+    } satisfies Suggestion;
+
+    const html = renderReviewThreadList([suggestion]);
+
+    expect(html).toContain("Workspace context included in request");
+    expect(html).toContain("sources/source.md");
+    expect(html).not.toContain("influenced");
+  });
+
   it("keeps settled history collapsed when no actionable threads remain", () => {
     const html = renderReviewThreadList([
       makeSuggestion("accepted-1", "accepted"),

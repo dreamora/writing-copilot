@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
-import { loadDocument } from "./saveDocument";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+import {
+  createServerDocumentSource,
+  type DocumentSource,
+} from "./documentSource";
 
 export interface DocumentSaveResult {
   hash: string;
@@ -15,9 +16,9 @@ interface DocumentEditorState {
   saving: boolean;
   error: string | null;
   dirty: boolean;
-  loadDoc: (docPath: string) => Promise<void>;
+  loadDoc: (source: string | DocumentSource) => Promise<void>;
   updateContent: (next: string) => void;
-  saveDoc: (docPath: string) => Promise<DocumentSaveResult>;
+  saveDoc: (source: string | DocumentSource) => Promise<DocumentSaveResult>;
 }
 
 export function useDocumentEditor(): DocumentEditorState {
@@ -27,15 +28,17 @@ export function useDocumentEditor(): DocumentEditorState {
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  const loadDoc = useCallback(async (docPath: string) => {
+  const loadDoc = useCallback(async (input: string | DocumentSource) => {
+    const source = resolveDocumentSource(input);
     setLoading(true);
     setError(null);
     try {
-      const result = await loadDocument(docPath);
+      const result = await source.load();
       setContent(result.content);
       setDirty(false);
     } catch (e) {
       setError((e as Error).message);
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -46,26 +49,14 @@ export function useDocumentEditor(): DocumentEditorState {
     setDirty(true);
   }, []);
 
-  const saveDoc = useCallback(async (docPath: string) => {
+  const saveDoc = useCallback(async (input: string | DocumentSource) => {
+    const source = resolveDocumentSource(input);
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/docs/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: docPath, content }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(`Save failed: ${(err as { error?: string }).error ?? res.statusText}`);
-      }
-      const payload = (await res.json()) as { hash: string; backupPath: string; timestamp: string };
+      const result = await source.save(content);
       setDirty(false);
-      return {
-        hash: payload.hash,
-        backupPath: payload.backupPath,
-        savedAt: payload.timestamp,
-      } satisfies DocumentSaveResult;
+      return result;
     } catch (e) {
       setError((e as Error).message);
       throw e;
@@ -84,4 +75,8 @@ export function useDocumentEditor(): DocumentEditorState {
     updateContent,
     saveDoc,
   };
+}
+
+function resolveDocumentSource(input: string | DocumentSource): DocumentSource {
+  return typeof input === "string" ? createServerDocumentSource(input) : input;
 }

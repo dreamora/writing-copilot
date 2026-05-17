@@ -13,7 +13,7 @@ function createTestDb(): Database {
   const db = new Database(":memory:");
   db.exec("PRAGMA journal_mode=WAL;");
   const migDir = join(import.meta.dir, "../../src/db/migrations");
-  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql", "007_professional_mode_context.sql"]) {
+  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql", "007_professional_mode_context.sql", "008_suggestion_context_provenance.sql"]) {
     db.exec(readFileSync(join(migDir, f), "utf-8"));
   }
   return db;
@@ -192,6 +192,47 @@ describe("Suggestion flow (integration)", () => {
     expect(s.provocations[0]?.kind).toBe("critique");
     expect(s.provocations[0]?.stage).toBe("final-output");
     expect(s.lenses[0]?.focus).toContain("Use style to remove friction");
+  });
+
+  it("persists selected workspace context provenance without full content", async () => {
+    const s = await service.createSuggestion({
+      ...BASE_REQ,
+      workspaceContext: {
+        budget: 1000,
+        totalIncludedChars: 31,
+        items: [
+          {
+            documentId: "workspace:abc:sources/source.md",
+            title: "source.md",
+            relativePath: "sources/source.md",
+            inclusionMode: "full",
+            content: "Sensitive source content",
+            charCount: 24,
+            includedCharCount: 24,
+            contentHash: "hash-source",
+            warningKinds: [],
+          },
+          {
+            documentId: "workspace:abc:sources/large.md",
+            title: "large.md",
+            relativePath: "sources/large.md",
+            inclusionMode: "omitted",
+            charCount: 10000,
+            includedCharCount: 0,
+            contentHash: "hash-large",
+            warningKinds: ["token"],
+          },
+        ],
+      },
+    });
+
+    expect(s.workspaceContext).toHaveLength(2);
+    expect(s.workspaceContext?.[0]?.relativePath).toBe("sources/source.md");
+    expect(s.workspaceContext?.[1]?.inclusionMode).toBe("omitted");
+    expect(JSON.stringify(s.workspaceContext)).not.toContain("Sensitive source content");
+
+    const fetched = service.getById(s.id);
+    expect(fetched?.workspaceContext?.[0]?.contentHash).toBe("hash-source");
   });
 
   it("persists de-slop suggestions as a professional mode action", async () => {

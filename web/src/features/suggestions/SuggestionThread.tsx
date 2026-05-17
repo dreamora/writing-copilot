@@ -42,6 +42,7 @@ export default function SuggestionThread({
   const isDecided = suggestion.status !== "open" && suggestion.status !== "deferred";
   const lenses = suggestion.lenses ?? [];
   const provocations = suggestion.provocations ?? [];
+  const workspaceContext = suggestion.workspaceContext ?? [];
   const roleContract = getProfessionalModeContract(suggestion.editorRole);
   const actionContract = getActionContract(roleContract.role, suggestion.actionType);
   const activeLens = getCuratedLens(suggestion.activeLens);
@@ -188,6 +189,17 @@ export default function SuggestionThread({
           {provocations.slice(0, 4).map((provocation, index) => (
             <div key={`${provocation.kind}-${index}`} style={{ marginTop: "4px" }}>
               <span style={{ color: "#6b7280" }}>{provocation.kind} · {provocation.stage}:</span> {provocation.prompt}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {workspaceContext.length > 0 && (
+        <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
+          <strong>Workspace context included in request</strong>
+          {workspaceContext.slice(0, 4).map((item) => (
+            <div key={item.documentId} style={{ marginTop: "4px", color: "#6b7280" }}>
+              {item.title} · {item.relativePath} · {item.inclusionMode}
             </div>
           ))}
         </div>

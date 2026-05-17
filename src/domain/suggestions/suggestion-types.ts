@@ -72,6 +72,27 @@ export interface SuggestionStyle {
   tone?: string;
 }
 
+export type WorkspaceContextInclusionMode = "full" | "trimmed" | "omitted" | "unavailable";
+
+export interface WorkspaceContextItem {
+  documentId: string;
+  title: string;
+  relativePath: string;
+  inclusionMode: WorkspaceContextInclusionMode;
+  content?: string;
+  charCount: number;
+  includedCharCount: number;
+  contentHash?: string;
+  warningKinds?: string[];
+  error?: string;
+}
+
+export interface WorkspaceContextPacket {
+  items: WorkspaceContextItem[];
+  totalIncludedChars: number;
+  budget: number;
+}
+
 export interface ShownEdit {
   editType: string;
   proposedText: string;
@@ -105,6 +126,7 @@ export interface SuggestionRequest {
   editorRole?: EditorRole;
   workflowStage?: SuggestionWorkflowStage;
   activeLens?: string;
+  workspaceContext?: WorkspaceContextPacket;
 }
 
 export interface SuggestionResponse {
@@ -140,6 +162,7 @@ export interface Suggestion {
   shownEdit?: ShownEdit;
   lenses: ThoughtLens[];
   provocations: ThoughtProvocation[];
+  workspaceContext?: WorkspaceContextItem[];
   status: SuggestionStatus;
   editedText?: string;
   createdAt: string;

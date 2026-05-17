@@ -23,6 +23,34 @@ describe("Prompt builder", () => {
     expect(prompt).toContain("Following paragraph.");
   });
 
+  it("includes explicitly selected workspace context when provided", () => {
+    const prompt = buildPrompt({
+      ...BASE_REQ,
+      workspaceContext: {
+        budget: 1000,
+        totalIncludedChars: 42,
+        items: [
+          {
+            documentId: "workspace:abc:sources/source.md",
+            title: "source.md",
+            relativePath: "sources/source.md",
+            inclusionMode: "full",
+            content: "Grounding note says the claim needs evidence.",
+            charCount: 42,
+            includedCharCount: 42,
+            contentHash: "hash-1",
+            warningKinds: [],
+          },
+        ],
+      },
+    });
+
+    expect(prompt).toContain("---SELECTED WORKSPACE CONTEXT---");
+    expect(prompt).toContain("Workspace-relative path: sources/source.md");
+    expect(prompt).toContain("Grounding note says the claim needs evidence.");
+    expect(prompt).toContain("Do not imply a document influenced your answer");
+  });
+
   it("includes action description for rewrite", () => {
     const prompt = buildPrompt({ ...BASE_REQ, actionType: "rewrite" });
     expect(prompt.toLowerCase()).toContain("rewrite");

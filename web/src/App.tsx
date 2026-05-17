@@ -26,6 +26,19 @@ import { applySuggestionToDocument, createInlineAnchorId } from "./features/edit
 import { useAnnotations } from "./features/annotations/annotationState";
 import AnnotationPanel from "./features/annotations/AnnotationPanel";
 import type { AnnotationHighlight } from "./features/editor/markdownPreview";
+import WorkspaceSidebar from "./features/workspace/WorkspaceSidebar";
+import { useLocalWorkspace } from "./features/workspace/useLocalWorkspace";
+import type { WorkspaceFileEntry } from "./features/workspace/workspaceTypes";
+import {
+  buildContextPacket,
+  toSuggestionWorkspaceContext,
+  type ContextPacket,
+} from "./features/workspace/contextPacket";
+import {
+  createServerDocumentSource,
+  createWorkspaceDocumentSource,
+  type DocumentSource,
+} from "./features/editor/documentSource";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_DOC = import.meta.env.VITE_DEFAULT_DOC ?? "sample.md";
@@ -74,6 +87,11 @@ export default function App() {
   const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null);
   const [docPath, setDocPath] = useState(DEFAULT_DOC);
   const [loadedDocPath, setLoadedDocPath] = useState(DEFAULT_DOC);
+  const workspace = useLocalWorkspace();
+  const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null);
+  const [contextFileIds, setContextFileIds] = useState<string[]>([]);
+  const [contextPacket, setContextPacket] = useState<ContextPacket | null>(null);
+  const [contextPacketError, setContextPacketError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
@@ -95,7 +113,23 @@ export default function App() {
     return normalizeCuratedLensId(window.localStorage.getItem(ACTIVE_LENS_STORAGE_KEY) || "") || "";
   });
   const { content, loading, saving, error, dirty, loadDoc, updateContent, saveDoc } = useDocumentEditor();
-  const documentId = useMemo(() => createDocumentId(loadedDocPath), [loadedDocPath]);
+  const activeWorkspaceFile = useMemo(
+    () => workspace.files.find((file) => file.id === activeWorkspaceFileId),
+    [activeWorkspaceFileId, workspace.files]
+  );
+  const contextEntries = useMemo(
+    () => contextFileIds
+      .map((id) => workspace.files.find((file) => file.id === id))
+      .filter((entry): entry is WorkspaceFileEntry => Boolean(entry)),
+    [contextFileIds, workspace.files]
+  );
+  const activeDocumentSource = useMemo<DocumentSource>(
+    () => activeWorkspaceFile
+      ? createWorkspaceDocumentSource(activeWorkspaceFile)
+      : createServerDocumentSource(loadedDocPath),
+    [activeWorkspaceFile, loadedDocPath]
+  );
+  const documentId = activeDocumentSource.documentId || createDocumentId(loadedDocPath);
   const {
     annotations,
     selectedAnnotationId,
@@ -151,20 +185,88 @@ export default function App() {
     if (typeof window !== "undefined") window.localStorage.setItem(ACTIVE_LENS_STORAGE_KEY, activeLens);
   }, [activeLens]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (contextEntries.length === 0) {
+      setContextPacket(null);
+      setContextPacketError(null);
+      return;
+    }
+    buildContextPacket(contextEntries)
+      .then((packet) => {
+        if (!cancelled) {
+          setContextPacket(packet);
+          setContextPacketError(null);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setContextPacketError((e as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contextEntries]);
+
   const handleLoad = useCallback(async () => {
     if (!docPath) return;
-    const nextDocumentId = createDocumentId(docPath);
+    if (loadingSuggestion) return;
+    if (dirty && typeof window !== "undefined" && !window.confirm("Load the default document and discard unsaved in-memory edits?")) {
+      return;
+    }
+    const source = createServerDocumentSource(docPath);
     setSuggestions([]);
     setSelectedAnnotationId(null);
-    await loadDoc(docPath);
+    setActiveWorkspaceFileId(null);
+    await loadDoc(source);
     setLoadedDocPath(docPath);
-    try { setSuggestions(await fetchSuggestions(nextDocumentId)); } catch {}
-  }, [docPath, loadDoc, setSelectedAnnotationId]);
+    try { setSuggestions(await fetchSuggestions(source.documentId)); } catch {}
+  }, [dirty, docPath, loadDoc, loadingSuggestion, setSelectedAnnotationId]);
+
+  const handleSelectWorkspaceFile = useCallback(async (entry: WorkspaceFileEntry) => {
+    if (loadingSuggestion) return;
+    if (dirty && typeof window !== "undefined" && !window.confirm("Switch documents and discard unsaved in-memory edits?")) {
+      return;
+    }
+    const source = createWorkspaceDocumentSource(entry);
+    setSuggestions([]);
+    setSelectedAnnotationId(null);
+    await loadDoc(source);
+    setActiveWorkspaceFileId(entry.id);
+    setLoadedDocPath(entry.relativePath);
+    setDocPath(entry.relativePath);
+    try { setSuggestions(await fetchSuggestions(source.documentId)); } catch {}
+  }, [dirty, loadDoc, loadingSuggestion, setSelectedAnnotationId]);
 
   const handleSave = useCallback(async () => {
-    if (!docPath) return;
-    await saveDoc(docPath);
-  }, [docPath, saveDoc]);
+    await saveDoc(activeDocumentSource);
+  }, [activeDocumentSource, saveDoc]);
+
+  const handleAddContext = useCallback((entry: WorkspaceFileEntry) => {
+    setContextFileIds((current) => current.includes(entry.id) ? current : [...current, entry.id]);
+  }, []);
+
+  const handleRemoveContext = useCallback((documentIdToRemove: string) => {
+    setContextFileIds((current) => current.filter((id) => id !== documentIdToRemove));
+  }, []);
+
+  const handleCloseWorkspace = useCallback(async () => {
+    if (loadingSuggestion) return;
+    if (activeWorkspaceFileId && dirty && typeof window !== "undefined" && !window.confirm("Close the workspace and discard unsaved in-memory edits?")) {
+      return;
+    }
+    const source = createServerDocumentSource(DEFAULT_DOC);
+    workspace.closeWorkspace();
+    setActiveWorkspaceFileId(null);
+    setContextFileIds([]);
+    setDocPath(DEFAULT_DOC);
+    setSuggestions([]);
+    setSelectedAnnotationId(null);
+    if (activeWorkspaceFileId) {
+      await loadDoc(source);
+      setLoadedDocPath(DEFAULT_DOC);
+      try { setSuggestions(await fetchSuggestions(source.documentId)); } catch {}
+    }
+  }, [activeWorkspaceFileId, dirty, loadDoc, loadingSuggestion, setSelectedAnnotationId, workspace]);
 
   const handleRequestSuggestion = useCallback(async (
     selection: SelectionSpan,
@@ -174,6 +276,15 @@ export default function App() {
     setLoadingSuggestion(true);
     setSuggestionError(null);
     try {
+      const nextContextPacket = contextEntries.length > 0 ? await buildContextPacket(contextEntries) : null;
+      if (nextContextPacket) {
+        setContextPacket(nextContextPacket);
+        const needsConfirmation = nextContextPacket.hasOmissions || nextContextPacket.hasWarnings;
+        if (needsConfirmation && typeof window !== "undefined") {
+          const ok = window.confirm("Selected context has warnings, omissions, or trimming. Send this prepared context packet to AI review?");
+          if (!ok) return;
+        }
+      }
       const context = buildSelectionContextEnvelope(content, selection.charStart, selection.charEnd);
       const blockId = createInlineAnchorId(content, selection.charStart);
       const next = await createSuggestion({
@@ -188,6 +299,7 @@ export default function App() {
         editorRole: selectedRole,
         workflowStage,
         activeLens: normalizeCuratedLensId(activeLens),
+        workspaceContext: nextContextPacket ? toSuggestionWorkspaceContext(nextContextPacket) : undefined,
       });
       setSuggestions((prev) => [next, ...prev]);
     } catch (e) {
@@ -195,7 +307,7 @@ export default function App() {
     } finally {
       setLoadingSuggestion(false);
     }
-  }, [activeLens, content, documentId, selectedModel, selectedRole, sessionId, workflowStage]);
+  }, [activeLens, content, contextEntries, documentId, selectedModel, selectedRole, sessionId, workflowStage]);
 
   const handleAccept = useCallback(async (id: string) => {
     const suggestion = suggestions.find((entry) => entry.id === id);
@@ -325,81 +437,115 @@ export default function App() {
             <button type="button" onClick={handleSave} disabled={saving || !content || !dirty} style={{ padding: "8px 16px", background: dirty ? "#f59e0b" : "#9ca3af", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>{saving ? "Saving…" : "Save"}</button>
           </div>
 
-          {(error || suggestionError) && (
+          {(error || suggestionError || contextPacketError) && (
             <div style={{ background: "#fee2e2", color: "#991b1b", padding: "10px", borderRadius: "4px", marginBottom: "12px", fontSize: "13px" }}>
-              {error ?? suggestionError}
+              {error ?? suggestionError ?? contextPacketError}
             </div>
           )}
 
-          <section className="editor-workspace" aria-label="Writing workspace">
-            <main className="editor-main">
-              {content ? (
-                <>
-                  <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>
-                    one continuous document field
-                    {dirty && " · unsaved"}
-                    {" · role: "}<span style={{ color: "#6b7280" }}>{selectedRoleLabel}</span>
-                    {" · model: "}<span style={{ color: "#6b7280" }}>{selectedModel}</span>
-                    {" · stage: "}<span style={{ color: "#6b7280" }}>{WORKFLOW_STAGE_OPTIONS.find((stage) => stage.value === workflowStage)?.label ?? workflowStage}</span>
-                    {activeLensOption && <>{" · lens: "}<span style={{ color: "#6b7280" }}>{activeLensOption.label}</span></>}
-                    {" · "}<span style={{ color: "#6b7280" }}>select text to add inline review feedback</span>
-                  </div>
-                  <ContinuousEditor
-                    documentId={documentId}
-                    content={content}
-                    dirty={dirty}
-                    onChange={updateContent}
-                    onRequestSuggestion={handleRequestSuggestion}
-                    editorRole={selectedRole}
-                    loadingSuggestion={loadingSuggestion}
-                    annotationHighlights={annotationHighlights}
-                    onAnnotate={handleAnnotate}
-                    onAnnotationClick={(id) => { setSelectedAnnotationId(id); setShowAnnotations(true); }}
-                  />
-                </>
-              ) : (
-                <div style={{ color: "#9ca3af", textAlign: "center", padding: "40px" }}>Enter a document path and click Load to begin reviewing a full document.</div>
-              )}
-            </main>
+          <section className="editor-shell" aria-label="Writing workspace shell">
+            <WorkspaceSidebar
+              mode={workspace.mode}
+              supported={workspace.supported}
+              directoryName={workspace.directoryName}
+              files={workspace.files}
+              activeDocumentId={activeWorkspaceFileId ?? undefined}
+              contextEntries={contextEntries}
+              contextPacket={contextPacket}
+              error={workspace.error}
+              onOpenWorkspace={workspace.openWorkspace}
+              onCloseWorkspace={() => { void handleCloseWorkspace(); }}
+              onSelectFile={handleSelectWorkspaceFile}
+              onAddContext={handleAddContext}
+              onRemoveContext={handleRemoveContext}
+            />
 
-            {content && (showSidebar || showAnnotations) && (
-              <aside className="editor-secondary-panels" aria-label="Review context">
-                {showSidebar && (
-                  <div>
-                    <CompactSummary documentId={documentId} sessionId={sessionId} refreshKey={suggestionSummaryRefreshKey} />
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
-                      Review threads
+            <section className="editor-workspace" aria-label="Writing workspace">
+              <main className="editor-main">
+                {content ? (
+                  <>
+                    <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>
+                      one continuous document field
+                      {dirty && " · unsaved"}
+                      {" · document: "}<span style={{ color: "#6b7280" }}>{activeDocumentSource.relativePath}</span>
+                      {" · role: "}<span style={{ color: "#6b7280" }}>{selectedRoleLabel}</span>
+                      {" · model: "}<span style={{ color: "#6b7280" }}>{selectedModel}</span>
+                      {" · stage: "}<span style={{ color: "#6b7280" }}>{WORKFLOW_STAGE_OPTIONS.find((stage) => stage.value === workflowStage)?.label ?? workflowStage}</span>
+                      {activeLensOption && <>{" · lens: "}<span style={{ color: "#6b7280" }}>{activeLensOption.label}</span></>}
+                      {" · "}<span style={{ color: "#6b7280" }}>select text to add inline review feedback</span>
                     </div>
-                    <ReviewThreadList
+                    <ContinuousEditor
+                      documentId={documentId}
                       content={content}
-                      suggestions={suggestions}
-                      onAccept={handleAccept}
-                      onReject={handleReject}
-                      onEditApply={handleEditApply}
-                      onDefer={handleDefer}
-                      onReopen={handleReopen}
+                      dirty={dirty}
+                      onChange={updateContent}
+                      onRequestSuggestion={handleRequestSuggestion}
+                      editorRole={selectedRole}
+                      loadingSuggestion={loadingSuggestion}
+                      annotationHighlights={annotationHighlights}
+                      onAnnotate={handleAnnotate}
+                      onAnnotationClick={(id) => { setSelectedAnnotationId(id); setShowAnnotations(true); }}
                     />
-                  </div>
+                  </>
+                ) : (
+                  <div style={{ color: "#9ca3af", textAlign: "center", padding: "40px" }}>Open a workspace file or load a default document to begin reviewing.</div>
                 )}
+              </main>
 
-                {showAnnotations && (
-                  <AnnotationPanel
-                    annotations={annotations}
-                    selectedAnnotationId={selectedAnnotationId}
-                    onSelect={setSelectedAnnotationId}
-                    onDelete={deleteAnnotation}
-                    isLoading={annotationsLoading}
-                    error={annotationsError}
-                  />
-                )}
-              </aside>
-            )}
+              {content && (showSidebar || showAnnotations) && (
+                <aside className="editor-secondary-panels" aria-label="Review context">
+                  {showSidebar && (
+                    <div>
+                      <CompactSummary documentId={documentId} sessionId={sessionId} refreshKey={suggestionSummaryRefreshKey} />
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
+                        Review threads
+                      </div>
+                      <ReviewThreadList
+                        content={content}
+                        suggestions={suggestions}
+                        onAccept={handleAccept}
+                        onReject={handleReject}
+                        onEditApply={handleEditApply}
+                        onDefer={handleDefer}
+                        onReopen={handleReopen}
+                      />
+                    </div>
+                  )}
+
+                  {showAnnotations && (
+                    <AnnotationPanel
+                      annotations={annotations}
+                      selectedAnnotationId={selectedAnnotationId}
+                      onSelect={setSelectedAnnotationId}
+                      onDelete={deleteAnnotation}
+                      isLoading={annotationsLoading}
+                      error={annotationsError}
+                    />
+                  )}
+                </aside>
+              )}
+            </section>
           </section>
         </>
       )}
 
       {activeTab === "insights" && <InsightsPage />}
       <style>{`
+        .editor-shell {
+          display: grid;
+          grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+          gap: 18px;
+          align-items: start;
+        }
+
+        .workspace-sidebar {
+          min-width: 0;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
+          padding: 12px;
+          background: #fff;
+        }
+
         .editor-workspace {
           display: grid;
           grid-template-columns: minmax(0, 1fr);
@@ -423,6 +569,12 @@ export default function App() {
         @media (min-width: 1280px) {
           .editor-secondary-panels {
             grid-template-columns: minmax(360px, 1.1fr) minmax(260px, 0.9fr);
+          }
+        }
+
+        @media (max-width: 900px) {
+          .editor-shell {
+            grid-template-columns: minmax(0, 1fr);
           }
         }
       `}</style>

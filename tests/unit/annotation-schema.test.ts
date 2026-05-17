@@ -14,6 +14,7 @@ function createTestDb(): Database {
     "004_telemetry.sql",
     "006_tool_for_thought.sql",
     "007_professional_mode_context.sql",
+    "008_suggestion_context_provenance.sql",
     "005_annotations.sql",
   ]) {
     db.exec(readFileSync(join(migDir, f), "utf-8"));
