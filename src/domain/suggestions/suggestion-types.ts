@@ -5,7 +5,32 @@ export type SuggestionActionType =
   | "rewrite"
   | "tighten"
   | "clarify"
-  | "custom";
+  | "de-slop"
+  | "custom"
+  | "flow-check"
+  | "register-check"
+  | "challenge-claim"
+  | "evidence-stress-test"
+  | "disambiguate"
+  | "cut-to-exact-claim"
+  | "sharpen-contrast"
+  | "improve-cadence"
+  | "add-warmth"
+  | "lift-without-cuteness"
+  | "agency-frame"
+  | "ground-the-claim";
+
+export type SuggestionWorkflowStage = "source-processing" | "final-output";
+
+export type ProvocationStage = SuggestionWorkflowStage | "both";
+
+export type ProvocationKind =
+  | "critique"
+  | "alternative"
+  | "counterargument"
+  | "fallacy-check"
+  | "lateral-move"
+  | "source-question";
 
 export type EditorRole =
   | "professional-lector"
@@ -14,6 +39,14 @@ export type EditorRole =
   | "sharp-stylist"
   | "joyful-but-adult"
   | "marc-voice";
+
+export type CuratedLensId =
+  | "evidence-quality"
+  | "reader-friction"
+  | "strategic-risk"
+  | "voice-fidelity"
+  | "commercial-implication"
+  | "source-relevance";
 
 export type SuggestionStatus =
   | "open"
@@ -39,6 +72,27 @@ export interface SuggestionStyle {
   tone?: string;
 }
 
+export interface ShownEdit {
+  editType: string;
+  proposedText: string;
+  whyThisEdit: string;
+}
+
+export interface ThoughtLens {
+  name: string;
+  focus: string;
+  sourceSignals: string[];
+  relevance: string;
+}
+
+export interface ThoughtProvocation {
+  kind: ProvocationKind;
+  stage: ProvocationStage;
+  prompt: string;
+  whyItMatters: string;
+  optional: boolean;
+}
+
 export interface SuggestionRequest {
   documentId: string;
   blockId: string;
@@ -49,6 +103,8 @@ export interface SuggestionRequest {
   style?: SuggestionStyle;
   model?: string;
   editorRole?: EditorRole;
+  workflowStage?: SuggestionWorkflowStage;
+  activeLens?: string;
 }
 
 export interface SuggestionResponse {
@@ -57,6 +113,9 @@ export interface SuggestionResponse {
   proposedText: string;
   riskNotes?: string;
   confidence?: number;
+  shownEdit?: ShownEdit;
+  lenses?: ThoughtLens[];
+  provocations?: ThoughtProvocation[];
 }
 
 export interface Suggestion {
@@ -75,6 +134,12 @@ export interface Suggestion {
   proposedText: string;
   riskNotes?: string;
   confidence?: number;
+  editorRole?: EditorRole;
+  workflowStage: SuggestionWorkflowStage;
+  activeLens?: string;
+  shownEdit?: ShownEdit;
+  lenses: ThoughtLens[];
+  provocations: ThoughtProvocation[];
   status: SuggestionStatus;
   editedText?: string;
   createdAt: string;

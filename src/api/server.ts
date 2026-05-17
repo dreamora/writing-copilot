@@ -8,6 +8,8 @@ import { CodexSuggestionProvider } from "../adapters/ai/CodexSuggestionProvider"
 import { createChatGptBrowserSessionProvider } from "../adapters/ai/ChatGptBrowserSessionProvider";
 import { createSuggestionRoutes } from "../routes/suggestions";
 import { createTelemetryRoutes } from "../routes/telemetry";
+import { AnnotationService } from "../domain/annotations/annotation-service";
+import { createAnnotationRoutes } from "../routes/annotations";
 import { EventWriter } from "../domain/telemetry/event-writer";
 import {
   ChatGptAuthError,
@@ -184,6 +186,8 @@ const eventWriter = new EventWriter(db);
 const suggestionService = new SuggestionService(db, providerBootstrap.provider, eventWriter);
 const suggestionRoutes = createSuggestionRoutes(suggestionService);
 const telemetryRoutes = createTelemetryRoutes(db);
+const annotationService = new AnnotationService(db);
+const annotationRoutes = createAnnotationRoutes(annotationService);
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -204,7 +208,7 @@ const server = Bun.serve({
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },
       });
@@ -250,15 +254,33 @@ const server = Bun.serve({
     if (method === "GET" && pathname === "/api/suggestions") {
       return addCors(suggestionRoutes["GET /api/suggestions"](request));
     }
-    const lifecycleMatch = pathname.match(/^\/api\/suggestions\/([^/]+)\/(accept|reject|edit-apply|defer)$/);
+    const lifecycleMatch = pathname.match(/^\/api\/suggestions\/([^/]+)\/(accept|reject|edit-apply|defer|reopen)$/);
     if (method === "POST" && lifecycleMatch) {
       const [, id, action] = lifecycleMatch;
       let res: Response;
       if (action === "accept") res = await suggestionRoutes["POST /api/suggestions/:id/accept"](request, id!);
       else if (action === "reject") res = await suggestionRoutes["POST /api/suggestions/:id/reject"](request, id!);
       else if (action === "edit-apply") res = await suggestionRoutes["POST /api/suggestions/:id/edit-apply"](request, id!);
-      else res = await suggestionRoutes["POST /api/suggestions/:id/defer"](request, id!);
+      else if (action === "defer") res = await suggestionRoutes["POST /api/suggestions/:id/defer"](request, id!);
+      else res = await suggestionRoutes["POST /api/suggestions/:id/reopen"](request, id!);
       return addCors(res);
+    }
+
+    // Annotation routes
+    const docAnnotationsMatch = pathname.match(/^\/api\/documents\/([^/]+)\/annotations$/);
+    if (docAnnotationsMatch) {
+      const [, documentId] = docAnnotationsMatch;
+      if (method === "GET") {
+        return addCors(annotationRoutes["GET /api/documents/:documentId/annotations"](request, documentId!));
+      }
+      if (method === "POST") {
+        return addCors(await annotationRoutes["POST /api/documents/:documentId/annotations"](request, documentId!));
+      }
+    }
+    const annotationDeleteMatch = pathname.match(/^\/api\/annotations\/([^/]+)$/);
+    if (method === "DELETE" && annotationDeleteMatch) {
+      const [, id] = annotationDeleteMatch;
+      return addCors(annotationRoutes["DELETE /api/annotations/:id"](request, id!));
     }
 
     if (method === "POST" && pathname === "/api/telemetry/events") {
@@ -287,13 +309,13 @@ const server = Bun.serve({
       return addCors(telemetryRoutes["GET /api/insights/summary"](request));
     }
 
+    if (pathname.startsWith("/api")) {
+      return addCors(json({ error: "Not found" }, 404));
+    }
+
     const staticResponse = await serveStaticFile(pathname);
     if (staticResponse) {
       return staticResponse;
-    }
-
-    if (method === "GET" && pathname.startsWith("/api")) {
-      return addCors(json({ error: "Not found" }, 404));
     }
 
     return (await serveStaticFile('/index.html')) ?? new Response("Not found");

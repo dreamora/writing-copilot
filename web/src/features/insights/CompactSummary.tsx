@@ -6,9 +6,10 @@ interface CompactSummaryProps {
   documentId: string;
   sessionId?: string;
   limit?: number;
+  refreshKey?: string;
 }
 
-export default function CompactSummary({ documentId, sessionId, limit = 5 }: CompactSummaryProps) {
+export default function CompactSummary({ documentId, sessionId, limit = 5, refreshKey }: CompactSummaryProps) {
   const [data, setData] = useState<InsightsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export default function CompactSummary({ documentId, sessionId, limit = 5 }: Com
 
   useEffect(() => {
     fetchSummary();
-  }, [fetchSummary]);
+  }, [fetchSummary, refreshKey]);
 
   if (!data && !error) {
     return (

@@ -52,7 +52,10 @@ export class CodexSuggestionProvider implements SuggestionProvider {
         console.warn(`Token error: ${sanitizeAuthError(error)}. Falling back to stub mode.`);
         return this.stubProvider.suggest(req);
       }
-      throw error;
+
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Codex transport failed: ${message}. Falling back to stub mode.`);
+      return this.stubProvider.suggest(req);
     }
   }
 
@@ -89,7 +92,8 @@ export class CodexSuggestionProvider implements SuggestionProvider {
 
       const args = [
         "exec",
-        "--full-auto",
+        "--sandbox",
+        "workspace-write",
         "--json",
         "--output-schema",
         schemaPath,
@@ -202,10 +206,78 @@ function getCodexOutputSchema(): Record<string, unknown> {
       issueSummary: { type: "string", minLength: 1 },
       rationale: { type: "string", minLength: 1 },
       proposedText: { type: "string", minLength: 1 },
+      shownEdit: {
+        type: ["object", "null"],
+        properties: {
+          editType: { type: "string", minLength: 1 },
+          proposedText: { type: "string", minLength: 1 },
+          whyThisEdit: { type: "string", minLength: 1 },
+        },
+        required: ["editType", "proposedText", "whyThisEdit"],
+        additionalProperties: false,
+      },
+      lenses: {
+        type: "array",
+        minItems: 1,
+        maxItems: 3,
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1 },
+            focus: { type: "string", minLength: 1 },
+            sourceSignals: {
+              type: "array",
+              items: { type: "string", minLength: 1 },
+            },
+            relevance: { type: "string", minLength: 1 },
+          },
+          required: ["name", "focus", "sourceSignals", "relevance"],
+          additionalProperties: false,
+        },
+      },
+      provocations: {
+        type: "array",
+        minItems: 2,
+        maxItems: 4,
+        items: {
+          type: "object",
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "critique",
+                "alternative",
+                "counterargument",
+                "fallacy-check",
+                "lateral-move",
+                "source-question",
+              ],
+            },
+            stage: {
+              type: "string",
+              enum: ["source-processing", "final-output", "both"],
+            },
+            prompt: { type: "string", minLength: 1 },
+            whyItMatters: { type: "string", minLength: 1 },
+            optional: { type: "boolean" },
+          },
+          required: ["kind", "stage", "prompt", "whyItMatters", "optional"],
+          additionalProperties: false,
+        },
+      },
       riskNotes: { type: ["string", "null"] },
       confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
     },
-    required: ["issueSummary", "rationale", "proposedText", "riskNotes", "confidence"],
+    required: [
+      "issueSummary",
+      "rationale",
+      "proposedText",
+      "shownEdit",
+      "lenses",
+      "provocations",
+      "riskNotes",
+      "confidence",
+    ],
     additionalProperties: false,
   };
 }

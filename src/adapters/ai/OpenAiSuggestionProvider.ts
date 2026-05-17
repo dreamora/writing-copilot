@@ -1,4 +1,9 @@
 import OpenAI from "openai";
+import {
+  getActionContract,
+  getCuratedLens,
+  getProfessionalModeContract,
+} from "../../domain/suggestions/professional-mode-contracts";
 import { buildPrompt } from "../../domain/suggestions/prompt-builder";
 import { parseModelResponse } from "../../domain/suggestions/response-parser";
 import type { SuggestionProvider } from "./SuggestionProvider";
@@ -76,7 +81,7 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
         model,
         messages: [{ role: "user", content: prompt }],
         temperature: this.temperature,
-        max_tokens: 500,
+        max_tokens: 1000,
       });
 
       const text = response.choices[0]?.message?.content || "";
@@ -102,14 +107,81 @@ export class OpenAiSuggestionProvider implements SuggestionProvider {
 
 export class StubSuggestionProvider implements SuggestionProvider {
   async suggest(req: SuggestionRequest): Promise<SuggestionResponse> {
+    const contract = getProfessionalModeContract(req.editorRole);
+    const action = getActionContract(contract.role, req.actionType);
+    const lens = getCuratedLens(req.activeLens);
+    const lensName = lens?.label ?? "Professional contract";
+    const lensFocus = lens
+      ? contract.lensInterpretations[lens.id]
+      : contract.sharedActionInterpretations.rewrite;
+    const focus = req.actionType === "de-slop"
+      ? `AI residue removal: ${action.promptInstruction} Lens behavior: ${lensFocus}`
+      : lensFocus;
+    const stage = req.workflowStage ?? "final-output";
+    const proposedText = req.actionType === "de-slop"
+      ? deslopFallback(req.selection.selectedText)
+      : req.selection.selectedText;
+    const didChange = proposedText !== req.selection.selectedText;
+
     return {
-      issueSummary: `[STUB] Improved clarity for: "${req.selection.selectedText.slice(0, 20)}..."`,
-      rationale: `This ${req.actionType} improves readability.`,
-      proposedText: `[IMPROVED] ${req.selection.selectedText}`,
+      issueSummary: `[STUB] ${contract.label} used ${action.label} for: "${req.selection.selectedText.slice(0, 20)}..."`,
+      rationale: didChange
+        ? `${action.label} removed fallback-detectable AI residue while preserving the selected span's structure.`
+        : `${action.label} follows the ${contract.label} contract through the ${lensName} lens.`,
+      proposedText,
+      shownEdit: {
+        editType: action.label,
+        proposedText,
+        whyThisEdit: didChange
+          ? "Fallback mode made conservative local edits instead of adding a role label or echoing the draft."
+          : `Stub mode shows how ${contract.label} would make ${action.label} visible.`,
+      },
+      lenses: [
+        {
+          name: lensName,
+          focus,
+          sourceSignals: [req.selection.selectedText.slice(0, 80)],
+          relevance: lens?.relevance ?? `Applies the ${contract.label} contract during ${stage} review.`,
+        },
+      ],
+      provocations: [
+        {
+          kind: stage === "source-processing" ? "source-question" : "critique",
+          stage,
+          prompt: `What would ${contract.label} challenge before accepting this ${action.label} suggestion?`,
+          whyItMatters: "Stub mode still preserves the tool-for-thought contract.",
+          optional: true,
+        },
+        {
+          kind: "alternative",
+          stage: "both",
+          prompt: lens
+            ? `What changes if you apply a different lens than ${lens.label}?`
+            : "What is the strongest plausible alternative framing?",
+          whyItMatters: "Alternatives prevent the first generated edit from becoming the only path.",
+          optional: true,
+        },
+      ],
       riskNotes: "This is a stub response (no ChatGPT auth configured, token expired, or token invalid)",
       confidence: 0.5,
     };
   }
+}
+
+function deslopFallback(text: string): string {
+  return [
+    [/\bOne of the clearest lessons I\u2019ve learned from two years of working with AI is that it does not need to be perfect to be useful\./g, "The clearest thing I have learned from two years of working with AI is this: it does not need to be perfect to be useful."],
+    [/\bIt needs to earn its keep in specific ways:/g, "It needs to help in specific ways:"],
+    [/\bchallenge my thinking and surface weak reasoning\b/g, "challenge my thinking and show me where the reasoning is weak"],
+    [/\bbreak ideas down until I understand them more clearly\b/g, "break ideas down far enough that I can see what I actually think"],
+    [/\bgive me a starting point I can test, fail with, and learn from quickly\b/g, "give me a starting point I can test, break, and learn from"],
+    [/\bI do not need AI to outsource my judgment\./g, "I do not need AI to take over my judgment."],
+    [/\bI need it to sharpen my judgment\./g, "I need it to make my judgment sharper."],
+    [/\bwhere does it still fall short of the standard you actually need\?/g, "where is it still below the bar you actually need?"],
+    [/\bunlocking a deeper way of thinking that empowers us to move forward with clarity\b/g, "thinking better without pretending the tool can do the judgment for us"],
+    [/\bnot just about\b/g, "not really about"],
+    [/\bmove forward with clarity\b/g, "make a clearer call"],
+  ].reduce((current, [pattern, replacement]) => current.replace(pattern as RegExp, replacement as string), text);
 }
 
 export function createSuggestionProvider(auth: ChatGptAuthConfig | null): SuggestionProvider {

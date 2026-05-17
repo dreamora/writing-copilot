@@ -1,6 +1,11 @@
 // Bead 2.6 — Suggestion thread + actions (D3 polish: failure states, loading feedback)
 import React, { useState } from "react";
 import type { Suggestion } from "../../../../src/domain/suggestions/suggestion-types";
+import {
+  getActionContract,
+  getCuratedLens,
+  getProfessionalModeContract,
+} from "../../../../src/domain/suggestions/professional-mode-contracts";
 import SuggestionDiff from "./SuggestionDiff";
 
 interface SuggestionThreadProps {
@@ -9,6 +14,7 @@ interface SuggestionThreadProps {
   onReject: (id: string) => void;
   onEditApply: (id: string, editedText: string) => void;
   onDefer: (id: string) => void;
+  onReopen: (id: string) => void;
 }
 
 const STATUS_BADGES: Record<string, { label: string; color: string; bg: string }> = {
@@ -25,6 +31,7 @@ export default function SuggestionThread({
   onReject,
   onEditApply,
   onDefer,
+  onReopen,
 }: SuggestionThreadProps) {
   const [showEdit, setShowEdit] = useState(false);
   const [editText, setEditText] = useState(suggestion.proposedText);
@@ -33,6 +40,11 @@ export default function SuggestionThread({
   
   const badge = STATUS_BADGES[suggestion.status] ?? STATUS_BADGES.open!;
   const isDecided = suggestion.status !== "open" && suggestion.status !== "deferred";
+  const lenses = suggestion.lenses ?? [];
+  const provocations = suggestion.provocations ?? [];
+  const roleContract = getProfessionalModeContract(suggestion.editorRole);
+  const actionContract = getActionContract(roleContract.role, suggestion.actionType);
+  const activeLens = getCuratedLens(suggestion.activeLens);
 
   const handleAcceptClick = async () => {
     setLoadingAction("accept");
@@ -84,6 +96,18 @@ export default function SuggestionThread({
     }
   };
 
+  const handleReopenClick = async () => {
+    setLoadingAction("reopen");
+    setActionError(null);
+    try {
+      await onReopen(suggestion.id);
+    } catch (e) {
+      setActionError(`Failed to reopen: ${(e as Error).message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   return (
     <div
       style={{
@@ -109,7 +133,7 @@ export default function SuggestionThread({
           {badge.label}
         </span>
         <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-          {suggestion.actionType} · {new Date(suggestion.createdAt).toLocaleTimeString()}
+          {actionContract.label} · {new Date(suggestion.createdAt).toLocaleTimeString()}
         </span>
       </div>
 
@@ -125,6 +149,49 @@ export default function SuggestionThread({
           <span style={{ color: "#f59e0b" }}> ⚠ {suggestion.riskNotes}</span>
         )}
       </div>
+
+      {(suggestion.workflowStage || suggestion.activeLens || suggestion.shownEdit) && (
+        <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
+          <div>
+            <strong>Mode:</strong> {roleContract.label}
+            {" · "}
+            <strong>Stage:</strong> {suggestion.workflowStage ?? "final-output"}
+            {suggestion.activeLens && <> · <strong>Lens:</strong> {activeLens?.label ?? suggestion.activeLens}</>}
+          </div>
+          <div style={{ marginTop: "4px" }}>
+            <strong>Action:</strong> {actionContract.label}
+            <span style={{ color: "#6b7280" }}> — {actionContract.description}</span>
+          </div>
+          {suggestion.shownEdit && (
+            <div style={{ marginTop: "4px" }}>
+              <strong>Shown edit:</strong> {suggestion.shownEdit.editType} — {suggestion.shownEdit.whyThisEdit}
+            </div>
+          )}
+        </div>
+      )}
+
+      {lenses.length > 0 && (
+        <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
+          <strong>Lenses</strong>
+          {lenses.slice(0, 3).map((lens, index) => (
+            <div key={`${lens.name}-${index}`} style={{ marginTop: "4px" }}>
+              {lens.name}: {lens.focus}
+              {lens.relevance && <span style={{ color: "#6b7280" }}> ({lens.relevance})</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {provocations.length > 0 && (
+        <div style={{ fontSize: "12px", color: "#374151", marginBottom: "10px" }}>
+          <strong>Provocations</strong>
+          {provocations.slice(0, 4).map((provocation, index) => (
+            <div key={`${provocation.kind}-${index}`} style={{ marginTop: "4px" }}>
+              <span style={{ color: "#6b7280" }}>{provocation.kind} · {provocation.stage}:</span> {provocation.prompt}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Diff preview */}
       <SuggestionDiff
@@ -271,6 +338,29 @@ export default function SuggestionThread({
             aria-label="Defer suggestion"
           >
             {loadingAction === "defer" ? "Deferring…" : "↷ Defer"}
+          </button>
+        </div>
+      )}
+
+      {suggestion.status === "deferred" && (
+        <div style={{ display: "flex", gap: "6px", marginTop: "12px", flexWrap: "wrap" }}>
+          <button
+            onClick={handleReopenClick}
+            disabled={loadingAction !== null}
+            style={{
+              padding: "5px 12px",
+              background: loadingAction === "reopen" ? "#9ca3af" : "#2563eb",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: loadingAction !== null ? "not-allowed" : "pointer",
+              fontSize: "12px",
+              fontWeight: 600,
+              opacity: loadingAction !== null && loadingAction !== "reopen" ? 0.5 : 1,
+            }}
+            aria-label="Reopen suggestion"
+          >
+            {loadingAction === "reopen" ? "Reopening…" : "Reopen"}
           </button>
         </div>
       )}

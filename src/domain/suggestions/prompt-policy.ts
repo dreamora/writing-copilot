@@ -1,8 +1,16 @@
 import { getGuardrailsForRole } from "./editorial-guardrails";
 import { getEditorialPreset } from "./editorial-presets";
 import { formatFewShotExamples } from "./few-shot-examples";
+import {
+  describeLensForStage,
+  getActionContract,
+  getCuratedLens,
+  getProfessionalModeContract,
+  type CuratedLens,
+  type ProfessionalModeContract,
+} from "./professional-mode-contracts";
 import { getVoiceProfileForRole } from "./voice-profiles";
-import type { SuggestionRequest } from "./suggestion-types";
+import type { SuggestionActionType, SuggestionRequest } from "./suggestion-types";
 
 export interface PromptPolicy {
   roleLabel: string;
@@ -18,10 +26,21 @@ export interface PromptPolicy {
   voiceAvoidMoves?: string[];
   voiceCadenceNotes?: string[];
   examples: string;
+  professionalContract: ProfessionalModeContract;
+  actionLabel: string;
+  actionInstruction: string;
+  actionDescription: string;
+  selectedLens?: CuratedLens;
+  lensStageFocus?: string;
+  lensRoleInterpretation?: string;
 }
 
 export function buildPromptPolicy(req: SuggestionRequest): PromptPolicy {
   const preset = getEditorialPreset(req.editorRole);
+  const professionalContract = getProfessionalModeContract(preset.role);
+  const action = getActionContract(preset.role, req.actionType as SuggestionActionType);
+  const selectedLens = getCuratedLens(req.activeLens);
+  const workflowStage = req.workflowStage ?? "final-output";
   const guardrails = getGuardrailsForRole(preset.role);
   const voiceProfile = getVoiceProfileForRole(preset.role);
 
@@ -39,5 +58,12 @@ export function buildPromptPolicy(req: SuggestionRequest): PromptPolicy {
     voiceAvoidMoves: voiceProfile?.avoidMoves,
     voiceCadenceNotes: voiceProfile?.cadenceNotes,
     examples: formatFewShotExamples(preset.role),
+    professionalContract,
+    actionLabel: action.label,
+    actionInstruction: action.promptInstruction,
+    actionDescription: action.description,
+    selectedLens,
+    lensStageFocus: selectedLens ? describeLensForStage(selectedLens, workflowStage) : undefined,
+    lensRoleInterpretation: selectedLens ? professionalContract.lensInterpretations[selectedLens.id] : undefined,
   };
 }

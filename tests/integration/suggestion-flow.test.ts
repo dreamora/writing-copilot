@@ -3,8 +3,9 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { SuggestionService } from "../../src/domain/suggestions/suggestion-service";
 import { StubSuggestionProvider } from "../../src/adapters/ai/OpenAiSuggestionProvider";
+import type { SuggestionProvider } from "../../src/adapters/ai/SuggestionProvider";
 import { EventWriter } from "../../src/domain/telemetry/event-writer";
-import type { SuggestionRequest } from "../../src/domain/suggestions/suggestion-types";
+import type { SuggestionRequest, SuggestionResponse } from "../../src/domain/suggestions/suggestion-types";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -12,10 +13,44 @@ function createTestDb(): Database {
   const db = new Database(":memory:");
   db.exec("PRAGMA journal_mode=WAL;");
   const migDir = join(import.meta.dir, "../../src/db/migrations");
-  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql"]) {
+  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql", "007_professional_mode_context.sql"]) {
     db.exec(readFileSync(join(migDir, f), "utf-8"));
   }
   return db;
+}
+
+class ThoughtProvider implements SuggestionProvider {
+  async suggest(): Promise<SuggestionResponse> {
+    return {
+      issueSummary: "The source claim needs a decision lens.",
+      rationale: "A lens and provocation keep the user engaged with the material.",
+      proposedText: "Use the consumer preference evidence to stage a reversible packaging test.",
+      shownEdit: {
+        editType: "decision-framing",
+        proposedText: "Use the consumer preference evidence to stage a reversible packaging test.",
+        whyThisEdit: "It shows the edit as a strategic move, not just polished prose.",
+      },
+      lenses: [
+        {
+          name: "consumer preference",
+          focus: "Which findings change the packaging decision.",
+          sourceSignals: ["consumers prefer sustainable packaging when convenience holds"],
+          relevance: "Prevents generic summarization of the source.",
+        },
+      ],
+      provocations: [
+        {
+          kind: "alternative",
+          stage: "source-processing",
+          prompt: "Which segment would reject this packaging change despite the aggregate trend?",
+          whyItMatters: "It pushes the reader to test the source before drafting.",
+          optional: true,
+        },
+      ],
+      riskNotes: null,
+      confidence: 0.77,
+    };
+  }
 }
 
 const BASE_REQ: SuggestionRequest = {
@@ -73,6 +108,14 @@ describe("Suggestion flow (integration)", () => {
     expect(deferred?.decidedAt).toBeFalsy();
   });
 
+  it("reopen moves a deferred suggestion back to open without decidedAt", async () => {
+    const s = await service.createSuggestion(BASE_REQ);
+    service.transition(s.id, "deferred");
+    const reopened = service.transition(s.id, "open");
+    expect(reopened?.status).toBe("open");
+    expect(reopened?.decidedAt).toBeFalsy();
+  });
+
   it("getSuggestionsForDocument returns all for document", async () => {
     await service.createSuggestion(BASE_REQ);
     await service.createSuggestion({ ...BASE_REQ, blockId: "block-002" });
@@ -91,5 +134,81 @@ describe("Suggestion flow (integration)", () => {
     const fetched = service.getById(s.id);
     expect(fetched?.status).toBe("accepted");
     expect(fetched?.decidedAt).toBeTruthy();
+  });
+
+  it("persists tool-for-thought metadata with the suggestion", async () => {
+    const ew = new EventWriter(db);
+    const thoughtService = new SuggestionService(db, new ThoughtProvider(), ew);
+    const s = await thoughtService.createSuggestion({
+      ...BASE_REQ,
+      editorRole: "rigorous-reviewer",
+      workflowStage: "source-processing",
+      activeLens: "evidence-quality",
+    });
+
+    expect(s.editorRole).toBe("rigorous-reviewer");
+    expect(s.workflowStage).toBe("source-processing");
+    expect(s.activeLens).toBe("evidence-quality");
+    expect(s.shownEdit?.editType).toBe("decision-framing");
+    expect(s.lenses?.[0]?.name).toBe("consumer preference");
+    expect(s.provocations?.[0]?.stage).toBe("source-processing");
+
+    const fetched = thoughtService.getById(s.id);
+    expect(fetched?.editorRole).toBe("rigorous-reviewer");
+    expect(fetched?.shownEdit?.whyThisEdit).toContain("strategic move");
+    expect(fetched?.lenses?.[0]?.sourceSignals[0]).toContain("convenience");
+    expect(fetched?.provocations?.[0]?.prompt).toContain("Which segment");
+  });
+
+  it("uses source-processing provocations for professional mode source review", async () => {
+    const s = await service.createSuggestion({
+      ...BASE_REQ,
+      editorRole: "rigorous-reviewer",
+      actionType: "evidence-stress-test",
+      workflowStage: "source-processing",
+      activeLens: "evidence-quality",
+    });
+
+    expect(s.editorRole).toBe("rigorous-reviewer");
+    expect(s.actionType).toBe("evidence-stress-test");
+    expect(s.activeLens).toBe("evidence-quality");
+    expect(s.provocations[0]?.kind).toBe("source-question");
+    expect(s.provocations[0]?.stage).toBe("source-processing");
+    expect(s.lenses[0]?.focus).toContain("Stress-test");
+  });
+
+  it("uses final-output provocations for professional mode writing review", async () => {
+    const s = await service.createSuggestion({
+      ...BASE_REQ,
+      editorRole: "sharp-stylist",
+      actionType: "sharpen-contrast",
+      workflowStage: "final-output",
+      activeLens: "reader-friction",
+    });
+
+    expect(s.editorRole).toBe("sharp-stylist");
+    expect(s.actionType).toBe("sharpen-contrast");
+    expect(s.activeLens).toBe("reader-friction");
+    expect(s.provocations[0]?.kind).toBe("critique");
+    expect(s.provocations[0]?.stage).toBe("final-output");
+    expect(s.lenses[0]?.focus).toContain("Use style to remove friction");
+  });
+
+  it("persists de-slop suggestions as a professional mode action", async () => {
+    const s = await service.createSuggestion({
+      ...BASE_REQ,
+      editorRole: "marc-voice",
+      actionType: "de-slop",
+      workflowStage: "final-output",
+      activeLens: "voice-fidelity",
+    });
+
+    expect(s.editorRole).toBe("marc-voice");
+    expect(s.actionType).toBe("de-slop");
+    expect(s.activeLens).toBe("voice-fidelity");
+    expect(s.lenses[0]?.focus).toContain("AI residue");
+
+    const fetched = service.getById(s.id);
+    expect(fetched?.actionType).toBe("de-slop");
   });
 });

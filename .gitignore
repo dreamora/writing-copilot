@@ -64,7 +64,10 @@ ai-setup-backup-*.tar.gz
 .worktrees/
 
 # framework-local state roots
-.compound-engineering/
+.compound-engineering/*
+!.compound-engineering/
+!.compound-engineering/config.local.example.yaml
+.compound-engineering/*.local.yaml
 .sisyphus/
 .planning/
 # END idream-managed agent workspace

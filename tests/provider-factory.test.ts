@@ -43,4 +43,54 @@ describe("StubSuggestionProvider", () => {
     expect(response.issueSummary).toContain("[STUB]");
     expect(response.confidence).toBe(0.5);
   });
+
+  it("does not leak role labels into proposed text", async () => {
+    const provider = new StubSuggestionProvider();
+    const response = await provider.suggest({
+      documentId: "doc-1",
+      blockId: "block-1",
+      editorRole: "marc-voice",
+      actionType: "rewrite",
+      selection: { selectedText: "Hello world", charStart: 0, charEnd: 11 },
+      context: { before: "", after: "" },
+    });
+
+    expect(response.proposedText).toBe("Hello world");
+    expect(response.shownEdit?.proposedText).toBe("Hello world");
+  });
+
+  it("makes conservative de-slop edits instead of echoing AI-cadence text", async () => {
+    const provider = new StubSuggestionProvider();
+    const selectedText = [
+      "One of the clearest lessons I\u2019ve learned from two years of working with AI is that it does not need to be perfect to be useful.",
+      "",
+      "It needs to earn its keep in specific ways:",
+      "",
+      "\u2022 challenge my thinking and surface weak reasoning",
+      "\u2022 break ideas down until I understand them more clearly",
+      "\u2022 give me a starting point I can test, fail with, and learn from quickly",
+      "",
+      "I do not need AI to outsource my judgment.",
+      "",
+      "I need it to sharpen my judgment.",
+      "",
+      "What has AI genuinely improved for you \u2014 and where does it still fall short of the standard you actually need?",
+    ].join("\n");
+
+    const response = await provider.suggest({
+      documentId: "doc-1",
+      blockId: "block-1",
+      editorRole: "marc-voice",
+      actionType: "de-slop",
+      activeLens: "voice-fidelity",
+      selection: { selectedText, charStart: 0, charEnd: selectedText.length },
+      context: { before: "", after: "" },
+    });
+
+    expect(response.proposedText).not.toBe(selectedText);
+    expect(response.proposedText).not.toContain("[MARC]");
+    expect(response.proposedText).toContain("The clearest thing I have learned");
+    expect(response.proposedText).toContain("show me where the reasoning is weak");
+    expect(response.proposedText).toContain("make my judgment sharper");
+  });
 });

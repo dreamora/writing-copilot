@@ -29,12 +29,20 @@ export const MARC_VOICE_PROFILE: VoiceProfile = {
     "Childish or cutesy language.",
     "Generic AI politeness or smoothing.",
     "LinkedIn-bro inspiration language.",
+    "LinkedIn creator cadence: hook, bullets, lesson, engagement question.",
     "Too many adjectives or inflated emotional tone.",
+    "Em-dash-heavy AI cadence.",
+    "Generic hinge phrases that create fake depth.",
+    "Social-post packaging, CTAs, or audience prompts added to a local edit.",
+    "Over-clean phrasing that removes the useful roughness from a real thought.",
   ],
   cadenceNotes: [
     "Often builds through contrast or reframed questions.",
     "Can be reflective, but lands on agency or judgment.",
     "Prefers tight, forceful sentences over ornamental ones.",
+    "Uses clean sentence breaks more often than ornamental punctuation.",
+    "Preserves the draft's rhetorical shape instead of converting it into platform-native content.",
+    "Can keep a little unevenness when it makes the line sound thought-through rather than manufactured.",
   ],
 };
 

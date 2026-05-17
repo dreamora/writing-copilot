@@ -61,10 +61,36 @@ const EXAMPLES: FewShotExample[] = [
     whyItMatters:
       "The bad version turns a sharp line into abstract sludge. The good version stays grounded, direct, and adult.",
   },
+  {
+    title: "Marc voice preserves structure without creator sludge",
+    appliesTo: ["marc-voice"],
+    selectedText:
+      "One of the biggest lessons I have learned from working with AI over the past two years is that it does not need to be perfect to be useful.\n\nIt needs to be useful in the right ways:\n\n- challenge my thinking and sharpen my reasoning\n- break down ideas so I understand them more deeply\n- give me a solid starting point so I can try, fail, and learn fast\n\nI do not need AI to outsource my judgment.\n\nI need it to raise the quality of my thinking.\n\nWhat has AI genuinely improved for you, and where does it still fall short?",
+    instruction: "Rewrite in Marc's voice with voice fidelity.",
+    badRewrite:
+      "One of the biggest lessons I have learned from using AI is that it does not need to be perfect to be useful.\n\nIt needs to be useful in the right ways:\n\n- challenge my thinking\n- sharpen my reasoning\n- help me learn faster\n\nI do not need AI to make decisions for me. I need it to raise the quality of my thinking.\n\nWhat has AI actually improved for you, and where does it still fall short?",
+    goodRewrite:
+      "One of the biggest lessons I have learned from working with AI over the past two years is that it does not need to be perfect to be useful.\n\nIt needs to be useful in the right ways:\n\n- challenge my thinking and sharpen my reasoning\n- break down ideas until I understand them more deeply\n- give me a solid starting point so I can try, fail, and learn faster\n\nI do not need AI to outsource my judgment.\n\nI need it to raise the quality of my thinking.\n\nWhat has AI genuinely improved for you, and where does it still fall short?",
+    whyItMatters:
+      "The bad version keeps the broad format but sands away specificity, weakens the judgment line, and swaps in generic creator cadence. The good version preserves the list and question because they are in the source, then only sharpens local wording.",
+  },
+  {
+    title: "De-slop removes fake depth",
+    appliesTo: ["marc-voice", "professional-lector", "sharp-stylist"],
+    selectedText:
+      "This is not just about productivity, but about unlocking a deeper way of thinking that empowers us to move forward with clarity.",
+    instruction: "De-slop the line without changing the claim.",
+    badRewrite:
+      "This is not only about productivity; it is about empowering a more meaningful way to move forward with clarity and purpose.",
+    goodRewrite:
+      "This is not really about productivity. It is about thinking better without pretending the tool can do the judgment for us.",
+    whyItMatters:
+      "The bad version keeps the fake-profound shape. The good version removes AI residue, keeps the claim local, and lets the cadence feel less manufactured without adding fake errors.",
+  },
 ];
 
 export function getFewShotExamples(role: EditorRole): FewShotExample[] {
-  return EXAMPLES.filter((example) => example.appliesTo === "all" || example.appliesTo.includes(role)).slice(0, 5);
+  return EXAMPLES.filter((example) => example.appliesTo === "all" || example.appliesTo.includes(role)).slice(0, 6);
 }
 
 export function formatFewShotExamples(role: EditorRole): string {

@@ -14,7 +14,7 @@ function createTestDb(): Database {
   const db = new Database(":memory:");
   db.exec("PRAGMA journal_mode=WAL;");
   const migDir = join(import.meta.dir, "../../src/db/migrations");
-  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql"]) {
+  for (const f of ["001_init.sql", "003_suggestions.sql", "004_telemetry.sql", "006_tool_for_thought.sql", "007_professional_mode_context.sql"]) {
     db.exec(readFileSync(join(migDir, f), "utf-8"));
   }
   return db;
@@ -63,6 +63,76 @@ describe("suggestion routes", () => {
     const types = events.map((event) => event.eventType);
     expect(types).toContain("suggestion_created");
     expect(types).toContain("suggestion_accepted");
+  });
+
+  it("reopens a deferred suggestion through the lifecycle route", async () => {
+    const createReq = new Request("http://localhost/api/suggestions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "reopen-session",
+        documentId: "doc-route",
+        blockId: "block-1",
+        actionType: "rewrite",
+        selection: { charStart: 0, charEnd: 4, selectedText: "text" },
+        context: { before: "", after: "" },
+      }),
+    });
+
+    const createRes = await suggestionRoutes["POST /api/suggestions"](createReq);
+    const created = (await createRes.json()) as { id: string };
+    const deferReq = new Request(`http://localhost/api/suggestions/${created.id}/defer`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "reopen-session" }),
+    });
+    await suggestionRoutes["POST /api/suggestions/:id/defer"](deferReq, created.id);
+
+    const reopenReq = new Request(`http://localhost/api/suggestions/${created.id}/reopen`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "reopen-session" }),
+    });
+    const reopenRes = await suggestionRoutes["POST /api/suggestions/:id/reopen"](reopenReq, created.id);
+
+    expect(reopenRes.status).toBe(200);
+    const reopened = (await reopenRes.json()) as { status: string; decidedAt?: string };
+    expect(reopened.status).toBe("open");
+    expect(reopened.decidedAt).toBeFalsy();
+
+    const types = eventWriter.getBySession("reopen-session").map((event) => event.eventType);
+    expect(types).toContain("suggestion_deferred");
+    expect(types).toContain("suggestion_reopened");
+  });
+
+  it("rejects reopening a decided suggestion through the lifecycle route", async () => {
+    const createReq = new Request("http://localhost/api/suggestions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "reopen-decided-session",
+        documentId: "doc-route",
+        blockId: "block-1",
+        actionType: "rewrite",
+        selection: { charStart: 0, charEnd: 4, selectedText: "text" },
+        context: { before: "", after: "" },
+      }),
+    });
+
+    const createRes = await suggestionRoutes["POST /api/suggestions"](createReq);
+    const created = (await createRes.json()) as { id: string };
+    await suggestionRoutes["POST /api/suggestions/:id/accept"](
+      new Request(`http://localhost/api/suggestions/${created.id}/accept`, { method: "POST" }),
+      created.id,
+    );
+
+    const reopenRes = await suggestionRoutes["POST /api/suggestions/:id/reopen"](
+      new Request(`http://localhost/api/suggestions/${created.id}/reopen`, { method: "POST" }),
+      created.id,
+    );
+
+    expect(reopenRes.status).toBe(409);
+    expect(((await reopenRes.json()) as { error: string }).error).toContain("Only deferred");
   });
 });
 

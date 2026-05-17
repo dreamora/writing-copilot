@@ -88,5 +88,17 @@ export function createSuggestionRoutes(service: SuggestionService) {
       if (!updated) return jsonError("Suggestion not found", 404);
       return json(updated);
     },
+
+    "POST /api/suggestions/:id/reopen": async (req: Request, id: string) => {
+      const body = await readOptionalJson(req);
+      const sessionId = typeof body.sessionId === "string" ? body.sessionId : undefined;
+      const existing = service.getById(id);
+      if (!existing) return jsonError("Suggestion not found", 404);
+      if (existing.status !== "deferred") {
+        return jsonError("Only deferred suggestions can be reopened", 409);
+      }
+      const updated = service.transition(id, "open", undefined, sessionId);
+      return json(updated);
+    },
   } as const;
 }

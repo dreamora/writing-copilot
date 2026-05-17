@@ -1,6 +1,9 @@
 // Bead 2.1 — Selection popover action menu
 import React, { useState, useRef, useEffect } from "react";
-import type { SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
+import {
+  getAvailableActionsForRole,
+} from "../../../../src/domain/suggestions/professional-mode-contracts";
+import type { EditorRole, SuggestionActionType } from "../../../../src/domain/suggestions/suggestion-types";
 import type { SelectionSpan, PopoverPosition } from "./SelectionState";
 
 interface SelectionPopoverProps {
@@ -8,31 +11,36 @@ interface SelectionPopoverProps {
   position: PopoverPosition;
   onAction: (actionType: SuggestionActionType, customInstruction?: string) => void;
   onClose: () => void;
+  editorRole?: EditorRole;
   loading?: boolean;
+  onAnnotate?: (commentText: string) => void | Promise<void>;
 }
-
-const ACTION_BUTTONS: Array<{ type: SuggestionActionType; label: string; title: string }> = [
-  { type: "rewrite", label: "↺ Rewrite", title: "Rewrite for clarity and flow" },
-  { type: "tighten", label: "✂ Tighten", title: "Remove redundancy and filler" },
-  { type: "clarify", label: "💡 Clarify", title: "Make easier to understand" },
-  { type: "ask", label: "? Ask", title: "Ask a question about this text" },
-  { type: "custom", label: "✎ Custom", title: "Custom instruction" },
-];
 
 export default function SelectionPopover({
   selection,
   position,
   onAction,
   onClose,
+  editorRole,
   loading = false,
+  onAnnotate,
 }: SelectionPopoverProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customInstruction, setCustomInstruction] = useState("");
+  const [showAnnotate, setShowAnnotate] = useState(false);
+  const [annotationText, setAnnotationText] = useState("");
+  const [annotationSubmitting, setAnnotationSubmitting] = useState(false);
+  const [annotationError, setAnnotationError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const annotationInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (showCustom) inputRef.current?.focus();
   }, [showCustom]);
+
+  useEffect(() => {
+    if (showAnnotate) annotationInputRef.current?.focus();
+  }, [showAnnotate]);
 
   // Close on Escape
   useEffect(() => {
@@ -54,6 +62,25 @@ export default function SelectionPopover({
   const handleCustomSubmit = () => {
     if (customInstruction.trim()) {
       onAction("custom", customInstruction.trim());
+    }
+  };
+
+  const actionButtons = getAvailableActionsForRole(editorRole);
+
+  const handleAnnotateSubmit = async () => {
+    const text = annotationText.trim();
+    if (!text || !onAnnotate || annotationSubmitting) return;
+    setAnnotationSubmitting(true);
+    setAnnotationError(null);
+    try {
+      await onAnnotate(text);
+      setAnnotationText("");
+      setShowAnnotate(false);
+      onClose();
+    } catch (e) {
+      setAnnotationError((e as Error).message || "Failed to save annotation.");
+    } finally {
+      setAnnotationSubmitting(false);
     }
   };
 
@@ -146,13 +173,85 @@ export default function SelectionPopover({
             </button>
           </div>
         </div>
+      ) : showAnnotate ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <textarea
+            ref={annotationInputRef}
+            value={annotationText}
+            onChange={(e) => {
+              setAnnotationText(e.target.value);
+              if (annotationError) setAnnotationError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void handleAnnotateSubmit();
+              }
+            }}
+            placeholder="Add a comment… (Cmd/Ctrl+Enter to save)"
+            rows={3}
+            style={{
+              padding: "6px 8px",
+              border: "1px solid #d1d5db",
+              borderRadius: "4px",
+              fontSize: "13px",
+              width: "100%",
+              boxSizing: "border-box",
+              fontFamily: "inherit",
+              resize: "vertical",
+            }}
+          />
+          {annotationError && (
+            <div style={{ fontSize: "12px", color: "#b91c1c", background: "#fee2e2", borderRadius: "4px", padding: "6px 8px" }}>
+              {annotationError}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button
+              onClick={() => void handleAnnotateSubmit()}
+              disabled={!annotationText.trim() || annotationSubmitting}
+              style={{
+                flex: 1,
+                padding: "6px",
+                background: "#f59e0b",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: annotationText.trim() && !annotationSubmitting ? "pointer" : "not-allowed",
+                fontSize: "12px",
+                opacity: annotationText.trim() && !annotationSubmitting ? 1 : 0.6,
+              }}
+            >
+              {annotationSubmitting ? "Saving…" : "Save annotation"}
+            </button>
+            <button
+              onClick={() => {
+                setShowAnnotate(false);
+                setAnnotationText("");
+                setAnnotationError(null);
+              }}
+              disabled={annotationSubmitting}
+              style={{
+                padding: "6px 10px",
+                background: "#f3f4f6",
+                color: "#374151",
+                border: "none",
+                borderRadius: "4px",
+                cursor: annotationSubmitting ? "not-allowed" : "pointer",
+                fontSize: "12px",
+              }}
+            >
+              Back
+            </button>
+          </div>
+        </div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-          {ACTION_BUTTONS.map((btn) => (
+          {actionButtons.map((btn) => (
             <button
               key={btn.type}
               onClick={() => handleAction(btn.type)}
-              title={btn.title}
+              title={btn.description}
               style={{
                 padding: "5px 10px",
                 background: "#f3f4f6",
@@ -164,9 +263,31 @@ export default function SelectionPopover({
                 fontWeight: 500,
               }}
             >
+              {btn.type === "rewrite" ? "↺ " : btn.type === "tighten" ? "✂ " : btn.type === "clarify" ? "💡 " : btn.type === "de-slop" ? "◇ " : btn.type === "ask" ? "? " : btn.type === "custom" ? "✎ " : ""}
               {btn.label}
             </button>
           ))}
+          {onAnnotate && (
+            <button
+              onClick={() => {
+                setAnnotationError(null);
+                setShowAnnotate(true);
+              }}
+              title="Add a comment annotation on this text"
+              style={{
+                padding: "5px 10px",
+                background: "#fef3c7",
+                color: "#92400e",
+                border: "1px solid #fde68a",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: 500,
+              }}
+            >
+              ✎ Annotate
+            </button>
+          )}
           <button
             onClick={onClose}
             style={{
