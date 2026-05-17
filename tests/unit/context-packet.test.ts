@@ -24,6 +24,31 @@ function entry(relativePath: string, content: string | Error): WorkspaceFileEntr
   };
 }
 
+function unreadableTextEntry(relativePath: string, size: number): WorkspaceFileEntry {
+  const name = relativePath.split("/").pop()!;
+  return {
+    id: `workspace:abc:${relativePath}`,
+    name,
+    relativePath,
+    extension: ".md",
+    status: "available",
+    handle: {
+      kind: "file",
+      name,
+      getFile: async () => ({
+        name,
+        size,
+        slice: () => {
+          throw new Error("slice should not be called when budget is exhausted");
+        },
+        text: async () => {
+          throw new Error("text should not be called when budget is exhausted");
+        },
+      } as unknown as File),
+    },
+  };
+}
+
 describe("context packet", () => {
   it("includes selected context files whole while under budget", async () => {
     const packet = await buildContextPacket([
@@ -49,6 +74,17 @@ describe("context packet", () => {
     expect(packet.items[1].content).toBe("abc");
     expect(packet.items[2].content).toBeUndefined();
     expect(packet.hasOmissions).toBe(true);
+  });
+
+  it("does not read omitted file text when the budget is exhausted", async () => {
+    const packet = await buildContextPacket([
+      entry("a.md", "12345"),
+      unreadableTextEntry("b.md", 100_000),
+    ], { budget: 5 });
+
+    expect(packet.items[1].inclusionMode).toBe("omitted");
+    expect(packet.items[1].charCount).toBe(100_000);
+    expect(packet.items[1].content).toBeUndefined();
   });
 
   it("keeps unavailable selected context visible in the packet", async () => {

@@ -16,7 +16,7 @@ interface DocumentEditorState {
   saving: boolean;
   error: string | null;
   dirty: boolean;
-  loadDoc: (source: string | DocumentSource) => Promise<void>;
+  loadDoc: (source: string | DocumentSource) => Promise<boolean>;
   updateContent: (next: string) => void;
   saveDoc: (source: string | DocumentSource) => Promise<DocumentSaveResult>;
 }
@@ -38,10 +38,11 @@ export function useDocumentEditor(): DocumentEditorState {
       setDirty(false);
     } catch (e) {
       setError((e as Error).message);
-      throw e;
+      return false;
     } finally {
       setLoading(false);
     }
+    return true;
   }, []);
 
   const updateContent = useCallback((next: string) => {

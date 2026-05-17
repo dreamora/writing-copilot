@@ -217,7 +217,7 @@ export default function App() {
     setSuggestions([]);
     setSelectedAnnotationId(null);
     setActiveWorkspaceFileId(null);
-    await loadDoc(source);
+    if (!(await loadDoc(source))) return;
     setLoadedDocPath(docPath);
     try { setSuggestions(await fetchSuggestions(source.documentId)); } catch {}
   }, [dirty, docPath, loadDoc, loadingSuggestion, setSelectedAnnotationId]);
@@ -230,7 +230,7 @@ export default function App() {
     const source = createWorkspaceDocumentSource(entry);
     setSuggestions([]);
     setSelectedAnnotationId(null);
-    await loadDoc(source);
+    if (!(await loadDoc(source))) return;
     setActiveWorkspaceFileId(entry.id);
     setLoadedDocPath(entry.relativePath);
     setDocPath(entry.relativePath);
@@ -262,7 +262,7 @@ export default function App() {
     setSuggestions([]);
     setSelectedAnnotationId(null);
     if (activeWorkspaceFileId) {
-      await loadDoc(source);
+      if (!(await loadDoc(source))) return;
       setLoadedDocPath(DEFAULT_DOC);
       try { setSuggestions(await fetchSuggestions(source.documentId)); } catch {}
     }

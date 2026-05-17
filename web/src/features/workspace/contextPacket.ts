@@ -45,12 +45,28 @@ export async function buildContextPacket(
   for (const entry of entries) {
     try {
       const file = await entry.handle.getFile();
-      const content = await file.text();
       const remaining = Math.max(0, budget - totalIncludedChars);
+
+      if (remaining === 0) {
+        items.push({
+          documentId: entry.id,
+          title: entry.name,
+          relativePath: entry.relativePath,
+          inclusionMode: "omitted",
+          charCount: file.size,
+          includedCharCount: 0,
+          warnings: [],
+        });
+        continue;
+      }
+
+      const content = file.size > remaining
+        ? await file.slice(0, remaining).text()
+        : await file.text();
       const warnings = detectSecretWarnings(content);
       const contentHash = hashString(content);
 
-      if (content.length <= remaining) {
+      if (file.size <= remaining) {
         totalIncludedChars += content.length;
         items.push({
           documentId: entry.id,
@@ -66,30 +82,15 @@ export async function buildContextPacket(
         continue;
       }
 
-      if (remaining > 0) {
-        const trimmed = content.slice(0, remaining);
-        totalIncludedChars += trimmed.length;
-        items.push({
-          documentId: entry.id,
-          title: entry.name,
-          relativePath: entry.relativePath,
-          inclusionMode: "trimmed",
-          content: trimmed,
-          charCount: content.length,
-          includedCharCount: trimmed.length,
-          contentHash,
-          warnings,
-        });
-        continue;
-      }
-
+      totalIncludedChars += content.length;
       items.push({
         documentId: entry.id,
         title: entry.name,
         relativePath: entry.relativePath,
-        inclusionMode: "omitted",
-        charCount: content.length,
-        includedCharCount: 0,
+        inclusionMode: "trimmed",
+        content,
+        charCount: file.size,
+        includedCharCount: content.length,
         contentHash,
         warnings,
       });

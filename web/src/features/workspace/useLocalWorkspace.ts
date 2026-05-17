@@ -42,9 +42,11 @@ export function useLocalWorkspace() {
 
     try {
       const directory = await pickerWindow.showDirectoryPicker!();
-      const files = await scanWorkspaceDirectory(directory);
+      const workspaceId = createWorkspaceSessionId();
+      const files = await scanWorkspaceDirectory(directory, { workspaceId });
       setState({
         mode: files.length > 0 ? "ready" : "empty",
+        workspaceId,
         directoryName: directory.name,
         files,
       });
@@ -75,4 +77,10 @@ export function useLocalWorkspace() {
     openWorkspace,
     closeWorkspace,
   };
+}
+
+function createWorkspaceSessionId(): string {
+  const maybeCrypto = globalThis.crypto as Crypto | undefined;
+  if (maybeCrypto?.randomUUID) return maybeCrypto.randomUUID();
+  return `workspace-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

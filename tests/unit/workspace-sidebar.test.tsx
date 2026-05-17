@@ -50,6 +50,8 @@ describe("WorkspaceSidebar", () => {
     expect(html).toContain("draft.md");
     expect(html).toContain("Add draft.md to context");
     expect(html).toContain("source.md already in context");
+    expect(html).toContain("role=\"tabpanel\"");
+    expect(html).toContain("aria-controls=");
   });
 
   it("renders unsupported browser fallback state", () => {

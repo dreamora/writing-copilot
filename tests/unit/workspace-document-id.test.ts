@@ -20,4 +20,11 @@ describe("document identity", () => {
     expect(original).not.toBe(renamed);
     expect(original).not.toBe(moved);
   });
+
+  it("treats different workspace sessions as separate identities", () => {
+    const first = createWorkspaceDocumentId("session-a", "draft.md");
+    const second = createWorkspaceDocumentId("session-b", "draft.md");
+
+    expect(first).not.toBe(second);
+  });
 });

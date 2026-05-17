@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ContextPacket } from "./contextPacket";
 import ContextSelectionPanel from "./ContextSelectionPanel";
 import WorkspaceFileList from "./WorkspaceFileList";
@@ -39,6 +39,11 @@ export default function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const [tab, setTab] = useState<SidebarTab>("files");
   const [query, setQuery] = useState("");
+  const tabBaseId = useId();
+  const filesTabId = `${tabBaseId}-files-tab`;
+  const filesPanelId = `${tabBaseId}-files-panel`;
+  const contextTabId = `${tabBaseId}-context-tab`;
+  const contextPanelId = `${tabBaseId}-context-panel`;
   const contextDocumentIds = new Set(contextEntries.map((entry) => entry.id));
   const activeFile = files.find((file) => file.id === activeDocumentId);
 
@@ -78,26 +83,30 @@ export default function WorkspaceSidebar({
       )}
 
       <div role="tablist" aria-label="Workspace surfaces" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", marginBottom: "12px" }}>
-        <button type="button" role="tab" aria-selected={tab === "files"} onClick={() => setTab("files")} style={tabStyle(tab === "files")}>Files</button>
-        <button type="button" role="tab" aria-selected={tab === "context"} onClick={() => setTab("context")} style={tabStyle(tab === "context")}>Context</button>
+        <button type="button" role="tab" id={filesTabId} aria-controls={filesPanelId} aria-selected={tab === "files"} onClick={() => setTab("files")} style={tabStyle(tab === "files")}>Files</button>
+        <button type="button" role="tab" id={contextTabId} aria-controls={contextPanelId} aria-selected={tab === "context"} onClick={() => setTab("context")} style={tabStyle(tab === "context")}>Context</button>
       </div>
 
       {tab === "files" ? (
-        <WorkspaceFileList
-          files={files}
-          activeDocumentId={activeDocumentId}
-          contextDocumentIds={contextDocumentIds}
-          query={query}
-          onQueryChange={setQuery}
-          onSelectFile={onSelectFile}
-          onAddContext={onAddContext}
-        />
+        <div role="tabpanel" id={filesPanelId} aria-labelledby={filesTabId}>
+          <WorkspaceFileList
+            files={files}
+            activeDocumentId={activeDocumentId}
+            contextDocumentIds={contextDocumentIds}
+            query={query}
+            onQueryChange={setQuery}
+            onSelectFile={onSelectFile}
+            onAddContext={onAddContext}
+          />
+        </div>
       ) : (
-        <ContextSelectionPanel
-          entries={contextEntries}
-          packet={contextPacket}
-          onRemoveContext={onRemoveContext}
-        />
+        <div role="tabpanel" id={contextPanelId} aria-labelledby={contextTabId}>
+          <ContextSelectionPanel
+            entries={contextEntries}
+            packet={contextPacket}
+            onRemoveContext={onRemoveContext}
+          />
+        </div>
       )}
     </aside>
   );

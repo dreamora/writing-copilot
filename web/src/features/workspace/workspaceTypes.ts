@@ -39,6 +39,7 @@ export interface WorkspaceFileEntry {
 
 export interface WorkspaceState {
   mode: WorkspaceMode;
+  workspaceId?: string;
   directoryName?: string;
   files: WorkspaceFileEntry[];
   error?: string;

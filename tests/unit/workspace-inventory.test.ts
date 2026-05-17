@@ -52,6 +52,17 @@ describe("workspace inventory", () => {
     expect(files[2].id).not.toBe(files[0].id);
   });
 
+  it("uses a session workspace id to avoid same-folder-name collisions", async () => {
+    const root = directory("writing", [file("draft.md")]);
+
+    const first = await scanWorkspaceDirectory(root, { workspaceId: "session-a" });
+    const second = await scanWorkspaceDirectory(root, { workspaceId: "session-b" });
+
+    expect(first[0].id).toBe(createWorkspaceDocumentId("session-a", "draft.md"));
+    expect(second[0].id).toBe(createWorkspaceDocumentId("session-b", "draft.md"));
+    expect(first[0].id).not.toBe(second[0].id);
+  });
+
   it("skips hidden, backup, archive, dependency, and generated paths", async () => {
     const root = directory("writing", [
       file(".secret.md"),

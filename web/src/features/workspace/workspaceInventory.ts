@@ -69,9 +69,10 @@ export function shouldSkipWorkspacePath(parts: string[], kind: "file" | "directo
 
 export async function scanWorkspaceDirectory(
   root: WorkspaceDirectoryHandle,
-  options: { maxDepth?: number } = {},
+  options: { maxDepth?: number; workspaceId?: string } = {},
 ): Promise<WorkspaceFileEntry[]> {
   const maxDepth = options.maxDepth ?? DEFAULT_WORKSPACE_SCAN_DEPTH;
+  const workspaceId = options.workspaceId ?? root.name;
   const files: WorkspaceFileEntry[] = [];
 
   async function visit(directory: WorkspaceDirectoryHandle, pathParts: string[], depth: number) {
@@ -90,7 +91,7 @@ export async function scanWorkspaceDirectory(
       const relativePath = nextParts.join("/");
       const extension = name.toLowerCase().endsWith(".markdown") ? ".markdown" : ".md";
       files.push({
-        id: createWorkspaceDocumentId(root.name, relativePath),
+        id: createWorkspaceDocumentId(workspaceId, relativePath),
         name,
         relativePath,
         extension,
