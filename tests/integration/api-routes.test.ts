@@ -104,6 +104,36 @@ describe("suggestion routes", () => {
     expect(types).toContain("suggestion_deferred");
     expect(types).toContain("suggestion_reopened");
   });
+
+  it("rejects reopening a decided suggestion through the lifecycle route", async () => {
+    const createReq = new Request("http://localhost/api/suggestions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "reopen-decided-session",
+        documentId: "doc-route",
+        blockId: "block-1",
+        actionType: "rewrite",
+        selection: { charStart: 0, charEnd: 4, selectedText: "text" },
+        context: { before: "", after: "" },
+      }),
+    });
+
+    const createRes = await suggestionRoutes["POST /api/suggestions"](createReq);
+    const created = (await createRes.json()) as { id: string };
+    await suggestionRoutes["POST /api/suggestions/:id/accept"](
+      new Request(`http://localhost/api/suggestions/${created.id}/accept`, { method: "POST" }),
+      created.id,
+    );
+
+    const reopenRes = await suggestionRoutes["POST /api/suggestions/:id/reopen"](
+      new Request(`http://localhost/api/suggestions/${created.id}/reopen`, { method: "POST" }),
+      created.id,
+    );
+
+    expect(reopenRes.status).toBe(409);
+    expect(((await reopenRes.json()) as { error: string }).error).toContain("Only deferred");
+  });
 });
 
 describe("telemetry routes", () => {

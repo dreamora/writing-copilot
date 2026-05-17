@@ -63,6 +63,9 @@ export function createAnnotationRoutes(service: AnnotationService) {
         });
         return json(created, 201);
       } catch (e) {
+        if ((e as Error).message.includes("overlaps")) {
+          return jsonError((e as Error).message, 409);
+        }
         return jsonError(`Failed to create annotation: ${(e as Error).message}`, 500);
       }
     },

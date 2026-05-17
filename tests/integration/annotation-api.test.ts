@@ -115,6 +115,45 @@ describe("annotation routes", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects overlapping annotation ranges for the same document", async () => {
+    const first = makeCreateRequest("doc-main", {
+      charStart: 0,
+      charEnd: 10,
+      originalText: "first span",
+      commentText: "first",
+    });
+    const second = makeCreateRequest("doc-main", {
+      charStart: 5,
+      charEnd: 12,
+      originalText: "overlap",
+      commentText: "second",
+    });
+
+    expect((await routes["POST /api/documents/:documentId/annotations"](first, "doc-main")).status).toBe(201);
+    const res = await routes["POST /api/documents/:documentId/annotations"](second, "doc-main");
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain("overlaps");
+  });
+
+  it("allows adjacent annotation ranges for the same document", async () => {
+    const first = makeCreateRequest("doc-main", {
+      charStart: 0,
+      charEnd: 5,
+      originalText: "first",
+      commentText: "first",
+    });
+    const second = makeCreateRequest("doc-main", {
+      charStart: 5,
+      charEnd: 10,
+      originalText: "second",
+      commentText: "second",
+    });
+
+    expect((await routes["POST /api/documents/:documentId/annotations"](first, "doc-main")).status).toBe(201);
+    expect((await routes["POST /api/documents/:documentId/annotations"](second, "doc-main")).status).toBe(201);
+  });
+
   it("rejects creation with non-numeric offsets", async () => {
     const req = makeCreateRequest("doc-main", {
       charStart: "0",

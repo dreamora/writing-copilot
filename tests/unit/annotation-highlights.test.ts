@@ -115,4 +115,12 @@ describe("renderMarkdownToHtml with annotations", () => {
     expect(html).toContain('<mark data-annotation-id="li1"');
     expect(html).toContain(">first</mark>");
   });
+
+  it("neutralizes unsafe markdown link schemes", () => {
+    const html = renderMarkdownToHtml("[x](javascript:alert(1)) [mail](mailto:test@example.com)");
+
+    expect(html).not.toContain("javascript:alert");
+    expect(html).toContain('href="#"');
+    expect(html).toContain('href="mailto:test@example.com"');
+  });
 });

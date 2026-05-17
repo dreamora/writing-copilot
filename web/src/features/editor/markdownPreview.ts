@@ -29,6 +29,12 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function sanitizeLinkHref(rawHref: string): string {
+  const href = rawHref.trim();
+  if (/^(https?:|mailto:)/i.test(href)) return escapeHtml(href);
+  return "#";
+}
+
 function renderInlineMarkdown(input: string): string {
   let html = escapeHtml(input);
   html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -37,7 +43,9 @@ function renderInlineMarkdown(input: string): string {
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   html = html.replace(/_([^_]+)_/g, "<em>$1</em>");
   html = html.replace(/~~([^~]+)~~/g, "<s>$1</s>");
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, href: string) => {
+    return `<a href="${sanitizeLinkHref(href)}" target="_blank" rel="noreferrer">${label}</a>`;
+  });
   return html;
 }
 

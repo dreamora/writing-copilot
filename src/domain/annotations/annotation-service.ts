@@ -24,6 +24,10 @@ export class AnnotationService {
   constructor(private db: Database) {}
 
   create(input: CreateAnnotationInput): Annotation {
+    if (this.hasOverlappingRange(input.documentId, input.charStart, input.charEnd)) {
+      throw new Error("Annotation range overlaps an existing annotation");
+    }
+
     const id = randomUUID();
     const now = new Date().toISOString();
     this.db
@@ -52,6 +56,19 @@ export class AnnotationService {
       .prepare("SELECT * FROM annotations WHERE document_id = ? ORDER BY created_at ASC")
       .all(documentId) as Record<string, unknown>[];
     return rows.map(rowToAnnotation);
+  }
+
+  hasOverlappingRange(documentId: string, charStart: number, charEnd: number): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM annotations
+         WHERE document_id = ?
+           AND char_start < ?
+           AND char_end > ?
+         LIMIT 1`
+      )
+      .get(documentId, charEnd, charStart) as { id: string } | undefined;
+    return !!row;
   }
 
   getById(id: string): Annotation | null {

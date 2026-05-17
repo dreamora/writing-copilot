@@ -30,6 +30,7 @@ export default function SelectionPopover({
   const [showAnnotate, setShowAnnotate] = useState(false);
   const [annotationText, setAnnotationText] = useState("");
   const [annotationSubmitting, setAnnotationSubmitting] = useState(false);
+  const [annotationError, setAnnotationError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const annotationInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -70,11 +71,14 @@ export default function SelectionPopover({
     const text = annotationText.trim();
     if (!text || !onAnnotate || annotationSubmitting) return;
     setAnnotationSubmitting(true);
+    setAnnotationError(null);
     try {
       await onAnnotate(text);
       setAnnotationText("");
       setShowAnnotate(false);
       onClose();
+    } catch (e) {
+      setAnnotationError((e as Error).message || "Failed to save annotation.");
     } finally {
       setAnnotationSubmitting(false);
     }
@@ -174,7 +178,10 @@ export default function SelectionPopover({
           <textarea
             ref={annotationInputRef}
             value={annotationText}
-            onChange={(e) => setAnnotationText(e.target.value)}
+            onChange={(e) => {
+              setAnnotationText(e.target.value);
+              if (annotationError) setAnnotationError(null);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
@@ -194,6 +201,11 @@ export default function SelectionPopover({
               resize: "vertical",
             }}
           />
+          {annotationError && (
+            <div style={{ fontSize: "12px", color: "#b91c1c", background: "#fee2e2", borderRadius: "4px", padding: "6px 8px" }}>
+              {annotationError}
+            </div>
+          )}
           <div style={{ display: "flex", gap: "6px" }}>
             <button
               onClick={() => void handleAnnotateSubmit()}
@@ -216,6 +228,7 @@ export default function SelectionPopover({
               onClick={() => {
                 setShowAnnotate(false);
                 setAnnotationText("");
+                setAnnotationError(null);
               }}
               disabled={annotationSubmitting}
               style={{
@@ -256,7 +269,10 @@ export default function SelectionPopover({
           ))}
           {onAnnotate && (
             <button
-              onClick={() => setShowAnnotate(true)}
+              onClick={() => {
+                setAnnotationError(null);
+                setShowAnnotate(true);
+              }}
               title="Add a comment annotation on this text"
               style={{
                 padding: "5px 10px",

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import type { Suggestion } from "../../../../src/domain/suggestions/suggestion-types";
-import { getLineNumberForOffset } from "../editor/documentEditing";
+import { createLineNumberLookup } from "../editor/documentEditing";
 import SuggestionThread from "./SuggestionThread";
 import { groupReviewThreads } from "./review-thread-groups";
 
@@ -62,6 +62,7 @@ export default function ReviewThreadList({
   onReopen,
 }: ReviewThreadListProps) {
   const grouped = useMemo(() => groupReviewThreads(suggestions), [suggestions]);
+  const getLineNumberForOffset = useMemo(() => createLineNumberLookup(content), [content]);
   const [deferredExpanded, setDeferredExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
 

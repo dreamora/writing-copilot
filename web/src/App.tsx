@@ -29,7 +29,6 @@ import type { AnnotationHighlight } from "./features/editor/markdownPreview";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_DOC = import.meta.env.VITE_DEFAULT_DOC ?? "sample.md";
-const DOCUMENT_ID = "doc-main";
 const ROLE_STORAGE_KEY = "writing-copilot.role";
 const WORKFLOW_STAGE_STORAGE_KEY = "writing-copilot.workflowStage";
 const ACTIVE_LENS_STORAGE_KEY = "writing-copilot.activeLens";
@@ -59,12 +58,22 @@ function createSessionId(): string {
   return `session-${Date.now()}`;
 }
 
+function createDocumentId(docPath: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < docPath.length; i += 1) {
+    hash ^= docPath.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `doc-${(hash >>> 0).toString(36)}`;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("editor");
   const [showSidebar, setShowSidebar] = useState(false);
   const [apiStatus, setApiStatus] = useState<"loading" | "ok" | "error">("loading");
   const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null);
   const [docPath, setDocPath] = useState(DEFAULT_DOC);
+  const [loadedDocPath, setLoadedDocPath] = useState(DEFAULT_DOC);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
@@ -86,6 +95,7 @@ export default function App() {
     return normalizeCuratedLensId(window.localStorage.getItem(ACTIVE_LENS_STORAGE_KEY) || "") || "";
   });
   const { content, loading, saving, error, dirty, loadDoc, updateContent, saveDoc } = useDocumentEditor();
+  const documentId = useMemo(() => createDocumentId(loadedDocPath), [loadedDocPath]);
   const {
     annotations,
     selectedAnnotationId,
@@ -94,7 +104,7 @@ export default function App() {
     deleteAnnotation,
     isLoading: annotationsLoading,
     error: annotationsError,
-  } = useAnnotations(DOCUMENT_ID);
+  } = useAnnotations(documentId);
   const [showAnnotations, setShowAnnotations] = useState(false);
 
   const annotationHighlights = useMemo<AnnotationHighlight[]>(
@@ -141,15 +151,15 @@ export default function App() {
     if (typeof window !== "undefined") window.localStorage.setItem(ACTIVE_LENS_STORAGE_KEY, activeLens);
   }, [activeLens]);
 
-  const refreshSuggestions = useCallback(async () => {
-    try { setSuggestions(await fetchSuggestions(DOCUMENT_ID)); } catch {}
-  }, []);
-
   const handleLoad = useCallback(async () => {
     if (!docPath) return;
+    const nextDocumentId = createDocumentId(docPath);
+    setSuggestions([]);
+    setSelectedAnnotationId(null);
     await loadDoc(docPath);
-    await refreshSuggestions();
-  }, [docPath, loadDoc, refreshSuggestions]);
+    setLoadedDocPath(docPath);
+    try { setSuggestions(await fetchSuggestions(nextDocumentId)); } catch {}
+  }, [docPath, loadDoc, setSelectedAnnotationId]);
 
   const handleSave = useCallback(async () => {
     if (!docPath) return;
@@ -167,7 +177,7 @@ export default function App() {
       const context = buildSelectionContextEnvelope(content, selection.charStart, selection.charEnd);
       const blockId = createInlineAnchorId(content, selection.charStart);
       const next = await createSuggestion({
-        documentId: DOCUMENT_ID,
+        documentId,
         blockId,
         selection,
         actionType,
@@ -185,7 +195,7 @@ export default function App() {
     } finally {
       setLoadingSuggestion(false);
     }
-  }, [activeLens, content, selectedModel, selectedRole, sessionId, workflowStage]);
+  }, [activeLens, content, documentId, selectedModel, selectedRole, sessionId, workflowStage]);
 
   const handleAccept = useCallback(async (id: string) => {
     const suggestion = suggestions.find((entry) => entry.id === id);
@@ -335,7 +345,7 @@ export default function App() {
                     {" · "}<span style={{ color: "#6b7280" }}>select text to add inline review feedback</span>
                   </div>
                   <ContinuousEditor
-                    documentId={DOCUMENT_ID}
+                    documentId={documentId}
                     content={content}
                     dirty={dirty}
                     onChange={updateContent}
@@ -356,7 +366,7 @@ export default function App() {
               <aside className="editor-secondary-panels" aria-label="Review context">
                 {showSidebar && (
                   <div>
-                    <CompactSummary documentId={DOCUMENT_ID} sessionId={sessionId} refreshKey={suggestionSummaryRefreshKey} />
+                    <CompactSummary documentId={documentId} sessionId={sessionId} refreshKey={suggestionSummaryRefreshKey} />
                     <div style={{ fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
                       Review threads
                     </div>
