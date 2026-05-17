@@ -22,8 +22,8 @@ export default function ContextSelectionPanel({
           : `${entries.length} document${entries.length === 1 ? "" : "s"} selected`}
       </div>
       {entries.length > 0 && (
-        <div style={{ fontSize: "11px", color: "#92400e", background: "#fef3c7", borderRadius: "4px", padding: "7px", marginBottom: "10px" }}>
-          Selected draft text and selected context can be sent to AI review.
+        <div role="note" style={{ fontSize: "11px", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "4px", padding: "7px", marginBottom: "10px" }}>
+          Selected local context may leave this workspace when you request AI review.
         </div>
       )}
       {packet && (

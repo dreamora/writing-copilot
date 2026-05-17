@@ -46,6 +46,7 @@ describe("ContextSelectionPanel", () => {
     expect(html).toContain("Will send trimmed");
     expect(html).toContain("Unavailable");
     expect(html).toContain("permission revoked");
+    expect(html).toContain("Selected local context may leave this workspace");
   });
 
   it("renders an explicit empty state", () => {
