@@ -8,6 +8,7 @@ import type {
   SuggestionRequest,
   ThoughtLens,
   ThoughtProvocation,
+  WorkspaceContextItem,
 } from "./suggestion-types";
 import type { SuggestionProvider } from "../../adapters/ai/SuggestionProvider";
 import type { EventWriter } from "../telemetry/event-writer";
@@ -44,6 +45,7 @@ function rowToSuggestion(row: Record<string, unknown>): Suggestion {
     shownEdit: parseJsonField<ShownEdit | undefined>(row.shown_edit_json, undefined),
     lenses: parseJsonField<ThoughtLens[]>(row.lenses_json, []),
     provocations: parseJsonField<ThoughtProvocation[]>(row.provocations_json, []),
+    workspaceContext: parseJsonField<WorkspaceContextItem[]>(row.workspace_context_json, []),
     status: row.status as SuggestionStatus,
     editedText: (row.edited_text as string | null) ?? undefined,
     createdAt: row.created_at as string,
@@ -79,8 +81,8 @@ export class SuggestionService {
           char_start, char_end, context_before, context_after,
           custom_instruction, issue_summary, rationale, proposed_text,
           risk_notes, confidence, editor_role, workflow_stage, active_lens, shown_edit_json,
-          lenses_json, provocations_json, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
+          lenses_json, provocations_json, workspace_context_json, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
       )
       .run(
         id, req.documentId, req.blockId, req.actionType,
@@ -91,6 +93,7 @@ export class SuggestionService {
         req.editorRole ?? "professional-lector", req.workflowStage ?? "final-output", req.activeLens?.trim() || null,
         response.shownEdit ? JSON.stringify(response.shownEdit) : null,
         JSON.stringify(response.lenses ?? []), JSON.stringify(response.provocations ?? []),
+        JSON.stringify(buildWorkspaceContextProvenance(req)),
         now, now
       );
 
@@ -118,6 +121,10 @@ export class SuggestionService {
         activeLens: req.activeLens?.trim() || null,
         lensCount: response.lenses?.length ?? 0,
         provocationCount: response.provocations?.length ?? 0,
+        workspaceContextCount: req.workspaceContext?.items.length ?? 0,
+        workspaceContextIncludedChars: req.workspaceContext?.totalIncludedChars ?? 0,
+        workspaceContextBudget: req.workspaceContext?.budget ?? 0,
+        workspaceContextModes: req.workspaceContext?.items.map((item) => item.inclusionMode) ?? [],
       },
     });
 
@@ -200,4 +207,18 @@ export class SuggestionService {
       .get(id) as Record<string, unknown> | null;
     return row ? rowToSuggestion(row) : null;
   }
+}
+
+function buildWorkspaceContextProvenance(req: SuggestionRequest): WorkspaceContextItem[] {
+  return (req.workspaceContext?.items ?? []).map((item) => ({
+    documentId: item.documentId,
+    title: item.title,
+    relativePath: item.relativePath,
+    inclusionMode: item.inclusionMode,
+    charCount: item.charCount,
+    includedCharCount: item.includedCharCount,
+    contentHash: item.contentHash,
+    warningKinds: item.warningKinds ?? [],
+    error: item.error,
+  }));
 }

@@ -71,6 +71,28 @@ function buildStructurePreservationSection(req: SuggestionRequest): string {
   return `\n\n---STRUCTURE PRESERVATION---\n- proposedText is a replacement for the selected span only, not a new draft or content format.\n- Preserve the selected span's rhetorical shape unless the user explicitly asks for restructuring.\n${listRule}\n${questionRule}\n- Do not add new claims, examples, lessons, timelines, or audience prompts.\n- Do not turn the selected passage into a social post, listicle, thread, carousel, or summary.`;
 }
 
+function buildWorkspaceContextSection(req: SuggestionRequest): string {
+  const packet = req.workspaceContext;
+  const sendable = packet?.items.filter((item) => item.content && item.inclusionMode !== "omitted" && item.inclusionMode !== "unavailable") ?? [];
+  if (!packet || sendable.length === 0) return "";
+
+  const items = sendable.map((item, index) => {
+    const status = item.inclusionMode === "trimmed"
+      ? `trimmed to ${item.includedCharCount}/${item.charCount} chars`
+      : `full ${item.charCount} chars`;
+    return [
+      `Context ${index + 1}: ${item.title}`,
+      `Workspace-relative path: ${item.relativePath}`,
+      `Inclusion: ${status}`,
+      item.warningKinds?.length ? `Warnings: ${item.warningKinds.join(", ")}` : "Warnings: none",
+      "",
+      item.content,
+    ].join("\n");
+  }).join("\n\n");
+
+  return `\n\n---SELECTED WORKSPACE CONTEXT---\nThe user explicitly selected these workspace documents as grounding material. Use them to sharpen evidence checks, counterarguments, source questions, and provocations. Do not imply a document influenced your answer unless you explicitly cite or reference it.\nBudget: ${packet.totalIncludedChars}/${packet.budget} chars included.\n\n${items}`;
+}
+
 export function buildPrompt(req: SuggestionRequest): string {
   const policy = buildPromptPolicy(req);
   const actionDesc = req.actionType === "custom" && req.customInstruction
@@ -140,6 +162,7 @@ Shared action interpretation for this role:
 
 ---SELECTED TEXT (the span to improve)---
 ${req.selection.selectedText}${contextSection}${styleSection}${examplesSection}
+${buildWorkspaceContextSection(req)}
 ${buildStructurePreservationSection(req)}
 
 ---FINAL INSTRUCTIONS---

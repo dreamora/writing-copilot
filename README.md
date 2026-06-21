@@ -76,6 +76,26 @@ The editor now supports a role selector in the toolbar. Choose the review stance
 
 `Marc voice` is derived from Marc's vault corpus and aims for grounded, sharp, adult edits instead of generic AI polish.
 
+## Local workspace context
+
+In Chromium-family browsers with File System Access directory support, the editor
+can open a local folder as a session-scoped writing workspace. Workspace mode
+lists visible `.md` and `.markdown` files from the selected folder, lets you
+choose the active draft, and lets you explicitly add other Markdown files as AI
+context.
+
+The browser owns local file access. Workspace files are read and saved through
+browser-granted file handles; the Bun server does not receive arbitrary local
+paths and does not scan folders outside the selected directory. If folder access
+is unavailable, cancelled, or revoked, the existing default-document flow remains
+available.
+
+Selected context is prepared as a visible bounded packet before an AI request.
+Only the selected draft span, surrounding draft context, and explicitly selected
+context documents are sent. Review-thread provenance stores relative document
+descriptors, inclusion modes, sizes, and hashes; it does not store absolute local
+paths or full context excerpts by default.
+
 ## Architecture
 
 - `src/api/` — Bun HTTP server
