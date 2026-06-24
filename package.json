@@ -14,12 +14,12 @@
     "probe:chatgpt-sentinel": "python3 scripts/probe-chatgpt-sentinel.py"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
     "better-sqlite3": "^9.2.0",
     "openai": "^6.34.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "vite": "^8.0.13",
+    "vite": "^8.0.16",
     "zod": "^3.22.0"
   },
   "devDependencies": {
